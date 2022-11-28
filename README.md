@@ -1,6 +1,7 @@
 # vr-tojinbo
  
 - [VR東尋坊](https://code4fukui.github.io/vr-tojinbo/)
+- [VR東尋坊 for VR/ARデバイス](https://code4fukui.github.io/vr-tojinbo/vr.html)
 - [VR東尋坊 glbデータ](https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb)
 - [東尋坊の石碑](https://code4fukui.github.io/vr-tojinbo/tojinbo-stone.usdz)
 - [東尋坊のガイド](https://code4fukui.github.io/vr-tojinbo/tojinbo-guide.usdz)
