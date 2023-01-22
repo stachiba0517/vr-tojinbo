@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://code4fukui.github.io/aframe/dist/aframe-master.min.js"></script>
+</head>
+<body>
+  <a-scene main id="scene" background="color: #333" renderer="colorManagement:true;">
+    <a-assets>
+      <a-asset-item id=base src=https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb></a-asset>
+    </a-assets>
+    
+    <!--
+    <a-sky id="sky0" position="0 0 0"
+      src="https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg"
+    >
+    -->
+  </a-sky>
+  <a-entity id="sky" gltf-model=#base position="0 0 0" rotation="0 0 0"></a-entity>
+    <a-entity id="me" rotation="0 0 0">
+    </a-entity>
+    <a-entity id="handleft" oculus-touch-controls="hand: left"></a-entity>
+    <a-entity id="handright" oculus-touch-controls="hand: right"></a-entity>
+
+    <a-entity id="camera" camera look-controls>
+      <a-text id="txt" value="3" position="0 0 -1" scale="2 2 2" align="center" color="#fff"></a-text>
+    </a-entity>
+  </a-scene>
+</body>
+
+<script type="module">
+
+let ot = new Date().getTime();
+const M = 35; // kg 体重
+const G = 9.8; // m/s2 重力加速度
+const DT = 1 / 60; // sec 計算間隔
+const DTM = 1000 * DT; // msec 計算間隔
+const K1 = 10; // n/m ばね定数
+const K2 = 0.24; // kg/m 空気抵抗係数
+const L = 100; // m バンジーロープ長さ
+const L2 = 140; // m バンジーロープ最大長さ
+const DL = 1 / 60; // バンジーロープ長さ変更
+const D = 0.98; // 速度減衰率
+let y = 0;
+let v = 0;
+let l = 0;
+
+let state = 0;
+
+const reset = () => {
+  y = v = 0;
+  state = 0;
+  ot = new Date().getTime();
+  console.log("reset")
+};
+
+document.body.onmousedown = () => state = -1;
+document.body.onmouseup = () => reset();
+//document.body.onclick = () => bg();
+
+
+handright.addEventListener('triggerdown', () => state = -1);
+handleft.addEventListener('triggerdown', () => state = -1);
+handright.addEventListener('triggerup', reset);
+handleft.addEventListener('triggerup', reset);
+//handright.addEventListener("bbuttondown", bg);
+/*
+handright.addEventListener("abuttondown", () => {
+  sky.setAttribute("src", "https://code4fukui.github.io/vr-fukui/img/vr-luff.jpg");
+});
+*/
+
+ /*
+AFRAME.registerComponent("main", {
+	init: async function() {
+  },
+  tick: function() {
+  }
+});
+*/
+
+setInterval(async () => {
+  if (state == -1) {
+    ot = new Date().getTime();
+  } else if (state == 0) {
+    const t = (new Date().getTime() - ot) / 1000;
+    l = L;
+    txt.setAttribute("value", Math.floor(3.9999 - t))
+    if (t > 3) {
+      txt.setAttribute("value", "");
+      state = 1;
+      ot = new Date().getTime();
+    }
+  } else if (state == 1) {
+    const t = (new Date().getTime() - ot) / 1000;
+    const f = M * G - (y > l ? K1 * (y - l) : 0) - K2 * v * v;
+    const a = f / M;
+    v += a * DT;
+    v *= D;
+    y += v;
+    l += DL;
+    if (l > L2) {
+      l = L2;
+    }
+    /*
+    if (t > 20) {
+      reset();
+    }
+    */
+  }
+  sky.setAttribute("position", { x: 30, y: y - 190, z: -7 });
+  //box.style.top = y * 3;
+  //p.textContent = `t:${t} y:${y}`;
+}, DTM);
+
+</script>
+</html>
