@@ -54,7 +54,7 @@ export const addCoaster = async (scene, curve) => {
 
   const loader = new PromiseGLTFLoader();
   loader.crossOrigin = "anonymous";
-  const glb = await loader.promiseLoad("./tojinbo-base1.glb");
+  const glb = await loader.promiseLoad("https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb");
   const obj = glb.scene;
   obj.position.y = 0;
 
