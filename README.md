@@ -10,7 +10,7 @@
 - [VR東尋坊バンジージャンプ (360度写真編)](https://code4fukui.github.io/vr-tojinbo/bungee360.html) forked [bungee-jumping](https://github.com/code4fukui/bungee-jumping/)
 - [東尋坊のステレオ写真 VR180](https://code4fukui.github.io/vr-tojinbo/tojinbo.vr180.jpg)
 - [VR東尋坊コースター](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster.html)
-- [VR東尋坊コースター俯瞰](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster_sky.html)
+- [VR東尋坊コースター俯瞰](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster_fly.html)
 
 ## 参考
 
