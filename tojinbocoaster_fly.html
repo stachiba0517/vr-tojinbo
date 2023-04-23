@@ -1,5 +1,5 @@
 <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
-<title>VR東尋坊コースター - VR-Tojinbo-Coaster</title>
+<title>VR東尋坊コースター俯瞰 - VR-Tojinbo-Coaster fly</title>
 <style>
 body {
 	margin: 0;
@@ -22,17 +22,17 @@ body {
 
 <script type="module">
 import * as THREE from "three";
-import { Curve, makeCurve, addCoaster } from "./TojinboCoaster.js";
-import { VRButton } from "three/addons/webxr/VRButton.js";
+import { Curve, addCoaster } from "./TojinboCoaster.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.xr.enabled = true;
+renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.xr.setReferenceSpaceType("local");
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(VRButton.createButton(renderer));
+//document.body.appendChild(VRButton.createButton(renderer));
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
@@ -41,14 +41,52 @@ window.addEventListener("resize", () => {
 
 const scene = new THREE.Scene();
 
-//const curve = makeCurve();
-const curve = new Curve();
+class Curve0 extends Curve {
+	getPointAt(t) {
+		t *= Math.PI * 2;
+		const x = Math.sin(t) * 50;
+		const y = Math.sin(t * 10) * 2 + 36;
+		const z = Math.cos(t) * 50;
+		return this.vector.set(x, y, z);
+	}
+}
+
+class Curve2 extends Curve {
+	getPointAt(t) {
+		t *= Math.PI * 2;
+		const x = Math.sin(t * 3) * Math.cos(t * 4) * 50;
+		const y = Math.sin(t * 10) * 2 + Math.cos(t * 17) * 2 + 35;
+		const z = Math.sin(t) * Math.sin(t * 4) * 50;
+		return this.vector.set(x, y, z);
+	}
+}
+
+const makeCurve = (hash) => {
+	switch (hash) {
+		case "#0":
+			return new Curve0();
+		case "#2":
+			return new Curve2();
+	}
+	return new Curve();
+};
+
+const curve = makeCurve(location.hash);
 await addCoaster(scene, curve);
 
-const train = new THREE.Object3D();
+//const train = new THREE.Object3D();
+const geometry = new THREE.BoxGeometry(.5, .5, 1);
+const color = 0xee7777;
+const material = new THREE.MeshBasicMaterial({ color });
+const train = new THREE.Mesh(geometry, material);
 scene.add(train);
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-train.add(camera);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.listenToKeyEvents(window);
+camera.position.set(0, 20, 100);
+//camera.position.set(0, 0, 0);
+controls.update();
+//train.add(camera);
 
 const position = new THREE.Vector3();
 const tangent = new THREE.Vector3();
@@ -71,10 +109,12 @@ renderer.setAnimationLoop(() => {
 	train.position.copy(position);
 	tangent.copy(curve.getTangentAt(progress));
 
-	velocity -= tangent.y * 0.0000001 * delta;
-	velocity = Math.max(0.00004, Math.min(0.0002, velocity));
+	const vc = 10;
+	velocity -= tangent.y * 0.0000001 * delta * vc;
+	velocity = Math.max(0.00004 * vc, Math.min(0.0002 * vc, velocity));
 	train.lookAt(lookAt.copy(position).sub(tangent));
 
+	controls.update();
 	renderer.render(scene, camera);
 	prevTime = time;
 });
