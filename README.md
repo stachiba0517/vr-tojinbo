@@ -17,3 +17,4 @@
 
 - [VR東尋坊 - 東尋坊をフォトグラメトリで3Dモデル化、VR Tojinbo on GitHub](https://fukuno.jig.jp/3623)
 - [3Dモデル版VR東尋坊でバンジージャンプ](https://fukuno.jig.jp/3832)
+- [VR東尋坊コースター 風の音 - Wind Outside | Sound Ambient | ロイヤリティフリーの音楽 - Pixabay](https://pixabay.com/ja/sound-effects/wind-outside-sound-ambient-141989/)
