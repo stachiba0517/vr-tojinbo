@@ -24,7 +24,36 @@ body {
 import * as THREE from "three";
 import { Curve, makeCurve, addCoaster } from "./TojinboCoaster.js";
 import { VRButton } from "three/addons/webxr/VRButton.js";
+import { WindNode } from "./WindNode.js";
 
+// wind audio
+let context = null;
+let audionode = null;
+
+const stop = async () => {
+  if (!context) return;
+  await context.close();
+  context = null;
+	audionode = null;
+};
+
+const start = async () => {
+  if (context) await stop();
+  const sampleRate = 48000; // mac default
+  context = new AudioContext({ sampleRate });
+
+  const node = await WindNode.create(context);
+  const fn = "./wind.wav";
+  node.setWaveFile(fn);
+  node.setOverwrap(0.058);
+  node.connect(context.destination);
+	audionode = node;
+	
+  //node.setVolume(range.value);
+  //node.setPitch(range2.value);
+};
+
+//
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -32,7 +61,11 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType("local");
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(VRButton.createButton(renderer));
+const btn = VRButton.createButton(renderer);
+btn.addEventListener("click", () => {
+	start();
+});
+document.body.appendChild(btn);
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
@@ -72,11 +105,20 @@ renderer.setAnimationLoop(() => {
 	tangent.copy(curve.getTangentAt(progress));
 
 	velocity -= tangent.y * 0.0000001 * delta;
-	velocity = Math.max(0.00004, Math.min(0.0002, velocity));
+	const vmin = 0.00004;
+	const vmax = 0.0002;
+	velocity = Math.max(vmin, Math.min(vmax, velocity));
 	train.lookAt(lookAt.copy(position).sub(tangent));
 
 	renderer.render(scene, camera);
 	prevTime = time;
+
+	if (audionode) {
+		const vp = (velocity - vmin) / (vmax - vmin);
+		const pitch = 1 + vp;
+		const vol = 0.3 + vp * .3;
+		audionode.setPitchVolume(pitch, vol);
+	}
 });
 </script>
 
