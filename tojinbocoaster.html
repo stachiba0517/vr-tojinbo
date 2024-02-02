@@ -65,6 +65,9 @@ const btn = VRButton.createButton(renderer);
 btn.addEventListener("click", () => {
 	start();
 });
+document.body.onclick = () => {
+	start();
+};
 document.body.appendChild(btn);
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
