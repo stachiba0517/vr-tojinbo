@@ -25,6 +25,7 @@ import * as THREE from "three";
 import { Curve, makeCurve, addCoaster } from "./TojinboCoaster.js";
 import { VRButton } from "three/addons/webxr/VRButton.js";
 import { WindNode } from "./WindNode.js";
+import { setVBMode } from "./setVBMode.js";
 
 const vbmode = location.hash == "#vbmode";
 
@@ -84,20 +85,8 @@ const curve = new Curve();
 //await addCoaster(scene, curve, true);
 await addCoaster(scene, curve, true);
 
-const setWireFrame = (scene, obj, color = new THREE.Color(0xb00000)) => {
-	const material = new THREE.MeshBasicMaterial({
-		color,
-		wireframe: true,
-		transparent: false,
-	});
-	scene.traverse(obj => {
-		obj.material = material;
-	});
-};
-
 if (vbmode) {
-	setWireFrame(scene, curve);
-	scene.background = new THREE.Color(0x000000);
+	setVBMode(scene);
 }
 
 const train = new THREE.Object3D();
