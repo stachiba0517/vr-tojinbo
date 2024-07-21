@@ -26,6 +26,8 @@ import { Curve, makeCurve, addCoaster } from "./TojinboCoaster.js";
 import { VRButton } from "three/addons/webxr/VRButton.js";
 import { WindNode } from "./WindNode.js";
 
+const vbmode = location.hash == "#vbmode";
+
 // wind audio
 let context = null;
 let audionode = null;
@@ -79,7 +81,24 @@ const scene = new THREE.Scene();
 
 //const curve = makeCurve();
 const curve = new Curve();
-await addCoaster(scene, curve);
+//await addCoaster(scene, curve, true);
+await addCoaster(scene, curve, true);
+
+const setWireFrame = (scene, obj, color = new THREE.Color(0xb00000)) => {
+	const material = new THREE.MeshBasicMaterial({
+		color,
+		wireframe: true,
+		transparent: false,
+	});
+	scene.traverse(obj => {
+		obj.material = material;
+	});
+};
+
+if (vbmode) {
+	setWireFrame(scene, curve);
+	scene.background = new THREE.Color(0x000000);
+}
 
 const train = new THREE.Object3D();
 scene.add(train);
@@ -103,7 +122,7 @@ renderer.setAnimationLoop(() => {
 	progress = progress % 1;
 
 	position.copy(curve.getPointAt(progress));
-	position.y += 0.2; // 0.3
+	position.y += 0.6; // the eyes point height from the rail
 	train.position.copy(position);
 	tangent.copy(curve.getTangentAt(progress));
 

@@ -29,8 +29,8 @@ export class Curve {
 
 export const makeCurve = () => new Curve();
 
-export const addCoaster = async (scene, curve) => {
-  { // sky
+export const addCoaster = async (scene, curve, skyon = true) => {
+  if (skyon) { // sky
     const url = "https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg";
     scene.background = new THREE.Color(0xf0f0ff); // sky
     
