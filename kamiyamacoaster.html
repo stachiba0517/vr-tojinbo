@@ -1,5 +1,5 @@
 <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
-<title>VR東尋坊コースター - VR-Tojinbo-Coaster</title>
+<title>神山まるごと高専コースター - VR-KamiyamaKosen-Coaster</title>
 <style>
 body {
 	margin: 0;
@@ -83,7 +83,10 @@ const scene = new THREE.Scene();
 //const curve = makeCurve();
 const curve = new Curve();
 //await addCoaster(scene, curve, true);
-await addCoaster(scene, curve);
+const skyurl = "https://kamiyama-kosen.github.io/3d-opendata/kamiyama-kosen-360-20250410.jpg";
+const modelurl = "https://kamiyama-kosen.github.io/3d-opendata/kamiyama-kosen-office-20250410.glb";
+const modelpos = { x: 0, y: -29, z: 0 };
+await addCoaster(scene, curve, skyurl, modelurl, modelpos);
 
 if (vbmode) {
 	setVBMode(scene);
@@ -99,7 +102,7 @@ const tangent = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 
 let velocity = 0;
-let progress = 0;
+let progress = 0.65;
 
 let prevTime = performance.now();
 
@@ -116,8 +119,8 @@ renderer.setAnimationLoop(() => {
 	tangent.copy(curve.getTangentAt(progress));
 
 	velocity -= tangent.y * 0.0000001 * delta;
-	const vmin = 0.00004;
-	const vmax = 0.0002;
+	const vmin = 0.00004 * 4;
+	const vmax = 0.0002 * 4;
 	velocity = Math.max(vmin, Math.min(vmax, velocity));
 	train.lookAt(lookAt.copy(position).sub(tangent));
 

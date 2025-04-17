@@ -29,9 +29,16 @@ export class Curve {
 
 export const makeCurve = () => new Curve();
 
-export const addCoaster = async (scene, curve, skyon = true) => {
-  if (skyon) { // sky
-    const url = "https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg";
+export const addCoaster = async (
+  scene,
+  curve,
+  skyurl = "https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg",
+  modelurl = "https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb",
+  modelpos = null,
+) => {
+  if (skyurl) { // sky
+    //const url = "https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg";
+    const url = skyurl;
     scene.background = new THREE.Color(0xf0f0ff); // sky
     
     const geometry = new THREE.SphereGeometry(300, 60, 40);
@@ -54,9 +61,15 @@ export const addCoaster = async (scene, curve, skyon = true) => {
 
   const loader = new PromiseGLTFLoader();
   loader.crossOrigin = "anonymous";
-  const glb = await loader.promiseLoad("https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb");
+  const glb = await loader.promiseLoad(modelurl);
   const obj = glb.scene;
-  obj.position.y = 0;
+  if (modelpos) {
+    obj.position.x = modelpos.x;
+    obj.position.y = modelpos.y;
+    obj.position.z = modelpos.z;
+  } else {
+    obj.position.y = 0;
+  }
 
   scene.add(glb.scene);
 
