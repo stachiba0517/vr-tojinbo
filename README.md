@@ -12,7 +12,7 @@
 - [東尋坊のステレオ写真 VR180](https://code4fukui.github.io/vr-tojinbo/tojinbo.vr180.jpg)
 - [VR東尋坊コースター](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster.html) ([VBmode](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster.html#vbmode))
 - [VR東尋坊コースター俯瞰](https://code4fukui.github.io/vr-tojinbo/tojinbocoaster_fly.html)
-- [VR神山まるごと高専坊コースター](https://code4fukui.github.io/vr-tojinbo/kamiyamacoaster.html)
+- [VR神山まるごと高専コースター](https://code4fukui.github.io/vr-tojinbo/kamiyamacoaster.html)
 
 ## 参考
 
