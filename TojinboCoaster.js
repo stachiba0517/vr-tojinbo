@@ -149,6 +149,7 @@ export const addCoaster = async (
   // スタート看板の作成
   {
     const startPos = curve.getPointAt(0);
+    const tangent = curve.getTangentAt(0); // スタート地点での進行方向
     
     // Canvasでテキストを描画
     const canvas = document.createElement('canvas');
@@ -172,17 +173,27 @@ export const addCoaster = async (
     context.textBaseline = 'middle';
     context.fillText('スタート', canvas.width / 2, canvas.height / 2);
     
-    // Spriteとして表示
+    // 平面（PlaneGeometry）として表示
     const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(spriteMaterial);
+    const geometry = new THREE.PlaneGeometry(20, 10);
+    const material = new THREE.MeshBasicMaterial({ 
+      map: texture, 
+      side: THREE.DoubleSide,
+      transparent: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
     
-    // 看板の位置とサイズ
-    sprite.position.copy(startPos);
-    sprite.position.y += 10; // レールの10m上空
-    sprite.scale.set(20, 10, 1); // 幅20m、高さ10m
+    // 看板の位置
+    mesh.position.copy(startPos);
+    mesh.position.y += 10; // レールの10m上空
     
-    scene.add(sprite);
+    // 進行方向を向くように回転
+    // tangentベクトルを使って看板を回転させる
+    const up = new THREE.Vector3(0, 1, 0);
+    const lookAtPos = new THREE.Vector3().copy(startPos).add(tangent);
+    mesh.lookAt(lookAtPos);
+    
+    scene.add(mesh);
   }
 
 
