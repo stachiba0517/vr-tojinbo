@@ -163,8 +163,8 @@ export const addCoaster = async (
     const createStartSignCanvas = () => {
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
-      canvas.width = 400;
-      canvas.height = 256;
+      canvas.width = 600; // 幅を広げる
+      canvas.height = 300; // 高さも少し広げる
       
       // 背景（看板の板）
       context.fillStyle = '#ffffff';
@@ -172,12 +172,12 @@ export const addCoaster = async (
       
       // 枠線
       context.strokeStyle = '#ff6b00';
-      context.lineWidth = 10;
-      context.strokeRect(7, 7, canvas.width - 14, canvas.height - 14);
+      context.lineWidth = 15;
+      context.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
       
       // テキスト（中央）
       context.fillStyle = '#ff0000';
-      context.font = 'bold 70px Arial';
+      context.font = 'bold 80px Arial';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillText('🦀スタート🦀', canvas.width / 2, canvas.height / 2);
@@ -259,6 +259,99 @@ export const addCoaster = async (
       capMesh.position.copy(pillarPos);
       capMesh.position.y = pillarHeight + 1;
       scene.add(capMesh);
+      
+      // 柱の土台（ベースプレート）
+      const baseGeometry = new THREE.CylinderGeometry(2, 2.5, 3, 8);
+      const baseMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x666666,
+        metalness: 0.5,
+        roughness: 0.7
+      });
+      const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+      baseMesh.position.copy(pillarPos);
+      baseMesh.position.y = 1.5;
+      scene.add(baseMesh);
+    }
+    
+    // 横梁（上部）- 2本の柱をつなぐ
+    {
+      const beamWidth = 24; // 柱の間の距離
+      const beamGeometry = new THREE.BoxGeometry(beamWidth, 1.5, 1.5);
+      const beamMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff6b00,
+        emissive: 0x331100,
+        emissiveIntensity: 0.2
+      });
+      const beamMesh = new THREE.Mesh(beamGeometry, beamMaterial);
+      beamMesh.position.copy(gatePos);
+      beamMesh.position.y = 52; // 柱の上部
+      
+      // 横梁を進行方向に対して垂直に配置
+      const beamRotation = Math.atan2(right.z, right.x);
+      beamMesh.rotation.y = beamRotation;
+      
+      scene.add(beamMesh);
+      
+      // 装飾用の上部横梁
+      const topBeamGeometry = new THREE.BoxGeometry(beamWidth + 2, 0.8, 2);
+      const topBeamMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+      const topBeamMesh = new THREE.Mesh(topBeamGeometry, topBeamMaterial);
+      topBeamMesh.position.copy(gatePos);
+      topBeamMesh.position.y = 53;
+      topBeamMesh.rotation.y = beamRotation;
+      scene.add(topBeamMesh);
+    }
+    
+    // 補強の斜め梁（左側）
+    {
+      const braceGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15, 8);
+      const braceMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xcc5500,
+        metalness: 0.3
+      });
+      
+      // 左下から右上への斜め梁
+      const braceMesh1 = new THREE.Mesh(braceGeometry, braceMaterial);
+      const leftPillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(-12));
+      braceMesh1.position.copy(leftPillarPos);
+      braceMesh1.position.y = 12;
+      braceMesh1.position.add(right.clone().multiplyScalar(3));
+      braceMesh1.rotation.z = Math.PI / 6; // 30度傾ける
+      scene.add(braceMesh1);
+      
+      // 左上から右下への斜め梁
+      const braceMesh2 = new THREE.Mesh(braceGeometry, braceMaterial);
+      braceMesh2.position.copy(leftPillarPos);
+      braceMesh2.position.y = 20;
+      braceMesh2.position.add(right.clone().multiplyScalar(3));
+      braceMesh2.rotation.z = -Math.PI / 6; // -30度傾ける
+      scene.add(braceMesh2);
+    }
+    
+    // 補強の斜め梁（右側）
+    {
+      const braceGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15, 8);
+      const braceMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xcc5500,
+        metalness: 0.3
+      });
+      
+      // 右下から左上への斜め梁
+      const braceMesh1 = new THREE.Mesh(braceGeometry, braceMaterial);
+      const rightPillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(12));
+      braceMesh1.position.copy(rightPillarPos);
+      braceMesh1.position.y = 12;
+      braceMesh1.position.add(right.clone().multiplyScalar(-3));
+      braceMesh1.rotation.z = -Math.PI / 6; // -30度傾ける
+      scene.add(braceMesh1);
+      
+      // 右上から左下への斜め梁
+      const braceMesh2 = new THREE.Mesh(braceGeometry, braceMaterial);
+      braceMesh2.position.copy(rightPillarPos);
+      braceMesh2.position.y = 20;
+      braceMesh2.position.add(right.clone().multiplyScalar(-3));
+      braceMesh2.rotation.z = Math.PI / 6; // 30度傾ける
+      scene.add(braceMesh2);
     }
   }
 
