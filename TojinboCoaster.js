@@ -146,6 +146,45 @@ export const addCoaster = async (
   }
   */
 
+  // スタート看板の作成
+  {
+    const startPos = curve.getPointAt(0);
+    
+    // Canvasでテキストを描画
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 512;
+    canvas.height = 256;
+    
+    // 背景（看板の板）
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 枠線
+    context.strokeStyle = '#000000';
+    context.lineWidth = 10;
+    context.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+    
+    // テキスト
+    context.fillStyle = '#ff0000';
+    context.font = 'bold 120px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText('スタート', canvas.width / 2, canvas.height / 2);
+    
+    // Spriteとして表示
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    
+    // 看板の位置とサイズ
+    sprite.position.copy(startPos);
+    sprite.position.y += 10; // レールの10m上空
+    sprite.scale.set(20, 10, 1); // 幅20m、高さ10m
+    
+    scene.add(sprite);
+  }
+
 
   /*
   const funfairs = [];
