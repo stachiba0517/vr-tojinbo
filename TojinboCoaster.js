@@ -146,53 +146,156 @@ export const addCoaster = async (
   }
   */
 
-  // スタート看板の作成
+  // スタートゲート（門）の作成
   {
     const startPos = curve.getPointAt(0);
     const tangent = curve.getTangentAt(0); // スタート地点での進行方向
     
-    // Canvasでテキストを描画
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.width = 512;
-    canvas.height = 256;
+    // ゲートの基準位置
+    const signOffset = new THREE.Vector3().copy(tangent).multiplyScalar(30);
+    const gatePos = new THREE.Vector3().copy(startPos).add(signOffset);
     
-    // 背景（看板の板）
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    // 進行方向に垂直な方向を計算（左右の方向）
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
     
-    // 枠線
-    context.strokeStyle = '#000000';
-    context.lineWidth = 10;
-    context.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+    // カニのロゴ用Canvas
+    const createCrabCanvas = () => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 256;
+      
+      // 背景
+      context.fillStyle = '#ff6b00';
+      context.beginPath();
+      context.arc(128, 128, 120, 0, Math.PI * 2);
+      context.fill();
+      
+      // カニの絵文字風イラスト
+      context.fillStyle = '#ffffff';
+      context.font = 'bold 150px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('🦀', 128, 138);
+      
+      return canvas;
+    };
     
-    // テキスト
-    context.fillStyle = '#ff0000';
-    context.font = 'bold 120px Arial';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText('スタート', canvas.width / 2, canvas.height / 2);
+    // スタート看板用Canvas
+    const createStartSignCanvas = () => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 512;
+      canvas.height = 256;
+      
+      // 背景（看板の板）
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 枠線
+      context.strokeStyle = '#ff6b00';
+      context.lineWidth = 15;
+      context.strokeRect(7, 7, canvas.width - 14, canvas.height - 14);
+      
+      // テキスト
+      context.fillStyle = '#ff0000';
+      context.font = 'bold 100px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('スタート', canvas.width / 2, canvas.height / 2);
+      
+      return canvas;
+    };
     
-    // 平面（PlaneGeometry）として表示
-    const texture = new THREE.CanvasTexture(canvas);
-    const geometry = new THREE.PlaneGeometry(20, 10);
-    const material = new THREE.MeshBasicMaterial({ 
-      map: texture, 
-      side: THREE.DoubleSide,
-      transparent: false
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+    // 左側のカニロゴ
+    {
+      const canvas = createCrabCanvas();
+      const texture = new THREE.CanvasTexture(canvas);
+      const geometry = new THREE.PlaneGeometry(6, 6);
+      const material = new THREE.MeshBasicMaterial({ 
+        map: texture, 
+        side: THREE.DoubleSide,
+        transparent: true
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      // 左側に配置
+      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(-12));
+      mesh.position.y = gatePos.y + 8;
+      
+      const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
+      mesh.lookAt(lookAtPos);
+      
+      scene.add(mesh);
+    }
     
-    // 看板の位置：スタート地点の少し手前（進行方向の逆方向）に配置
-    const signOffset = new THREE.Vector3().copy(tangent).multiplyScalar(15); // 進行方向に15m先
-    mesh.position.copy(startPos).add(signOffset);
-    mesh.position.y += 10; // レールの10m上空
+    // 右側のカニロゴ
+    {
+      const canvas = createCrabCanvas();
+      const texture = new THREE.CanvasTexture(canvas);
+      const geometry = new THREE.PlaneGeometry(6, 6);
+      const material = new THREE.MeshBasicMaterial({ 
+        map: texture, 
+        side: THREE.DoubleSide,
+        transparent: true
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      // 右側に配置
+      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(12));
+      mesh.position.y = gatePos.y + 8;
+      
+      const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
+      mesh.lookAt(lookAtPos);
+      
+      scene.add(mesh);
+    }
     
-    // 進行方向の逆を向くように回転（コースターから看板が見えるように）
-    const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
-    mesh.lookAt(lookAtPos);
+    // 中央のスタート看板
+    {
+      const canvas = createStartSignCanvas();
+      const texture = new THREE.CanvasTexture(canvas);
+      const geometry = new THREE.PlaneGeometry(20, 10);
+      const material = new THREE.MeshBasicMaterial({ 
+        map: texture, 
+        side: THREE.DoubleSide,
+        transparent: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      mesh.position.copy(gatePos);
+      mesh.position.y = gatePos.y + 5;
+      
+      const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
+      mesh.lookAt(lookAtPos);
+      
+      scene.add(mesh);
+    }
     
-    scene.add(mesh);
+    // 左の柱
+    {
+      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 15, 16);
+      const material = new THREE.MeshPhongMaterial({ color: 0xff6b00 });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(-12));
+      mesh.position.y = gatePos.y;
+      
+      scene.add(mesh);
+    }
+    
+    // 右の柱
+    {
+      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 15, 16);
+      const material = new THREE.MeshPhongMaterial({ color: 0xff6b00 });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(12));
+      mesh.position.y = gatePos.y;
+      
+      scene.add(mesh);
+    }
   }
 
 
