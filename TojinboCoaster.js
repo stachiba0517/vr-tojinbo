@@ -159,8 +159,8 @@ export const addCoaster = async (
     const up = new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
     
-    // スタート看板用Canvas
-    const createStartSignCanvas = () => {
+    // 看板用Canvas作成関数（文字を切り替え可能）
+    const createSignCanvas = (text) => {
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       canvas.width = 600; // 幅を広げる
@@ -180,31 +180,144 @@ export const addCoaster = async (
       context.font = 'bold 80px Arial';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      context.fillText('🦀スタート🦀', canvas.width / 2, canvas.height / 2);
+      context.fillText(text, canvas.width / 2, canvas.height / 2);
       
 
       return canvas;
     };
     
-    // 中央のスタート看板
+    // テクスチャを更新する関数
+    const updateSignTexture = (texture, text) => {
+      const canvas = createSignCanvas(text);
+      texture.image = canvas;
+      texture.needsUpdate = true;
+    };
+    
+    // 中央のスタート看板（風でひらひら動く布）
     {
-      const canvas = createStartSignCanvas();
+      const canvas = createSignCanvas('🦀スタート🦀');
       const texture = new THREE.CanvasTexture(canvas);
-      const geometry = new THREE.PlaneGeometry(20, 10);
-      const material = new THREE.MeshBasicMaterial({ 
+      
+      // 細かく分割したジオメトリで布を表現
+      const geometry = new THREE.PlaneGeometry(20, 10, 40, 20);
+      
+      // 元の位置を保存
+      const originalPositions = geometry.attributes.position.array.slice();
+      geometry.userData.originalPositions = originalPositions;
+      
+      const material = new THREE.MeshStandardMaterial({ 
         map: texture, 
         side: THREE.DoubleSide,
-        transparent: false
+        transparent: false,
+        roughness: 0.85,
+        metalness: 0.05,
+        emissive: 0xffffff,
+        emissiveMap: texture,
+        emissiveIntensity: 0.7  // 自己発光で明るく見せる
       });
+      
       const mesh = new THREE.Mesh(geometry, material);
       
+      // 看板を横梁の下に配置（高さ52mの横梁の下）
+      const pillarHeight = 50;
       mesh.position.copy(gatePos);
-      mesh.position.y = gatePos.y + 5;
+      mesh.position.y = pillarHeight + 2 - 5 - 2.5; // 横梁の下から2.5m下に看板の上端
       
       const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
       mesh.lookAt(lookAtPos);
       
+      // アニメーション用のデータを保存
+      mesh.userData.isCloth = true;
+      mesh.userData.time = 0;
+      mesh.userData.baseRotation = mesh.rotation.clone();
+      
       scene.add(mesh);
+      
+      // テクスチャ更新関数をシーンに保存
+      if (!scene.userData.signControl) {
+        scene.userData.signControl = {
+          texture: texture,
+          material: material,
+          updateTexture: updateSignTexture,
+          isGoal: false
+        };
+      }
+      
+      // 看板の上端の高さを計算
+      const bannerTopY = pillarHeight + 2 - 2.5; // 横梁から2.5m下
+      
+      // 看板を吊り下げるチェーン
+      const chainGeometry = new THREE.CylinderGeometry(0.08, 0.08, 2.5, 8);
+      const chainMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x888888,
+        metalness: 0.8,
+        roughness: 0.3
+      });
+      
+      // 左のチェーン
+      const leftChain = new THREE.Mesh(chainGeometry, chainMaterial);
+      leftChain.position.copy(gatePos).add(right.clone().multiplyScalar(-8));
+      leftChain.position.y = (pillarHeight + 2 + bannerTopY) / 2; // 横梁と看板の間
+      scene.add(leftChain);
+      
+      // 右のチェーン
+      const rightChain = new THREE.Mesh(chainGeometry, chainMaterial);
+      rightChain.position.copy(gatePos).add(right.clone().multiplyScalar(8));
+      rightChain.position.y = (pillarHeight + 2 + bannerTopY) / 2;
+      scene.add(rightChain);
+      
+      // チェーンの接続金具（横梁側）
+      const hookGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+      const hookMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xcccccc,
+        metalness: 0.9
+      });
+      
+      const leftHookTop = new THREE.Mesh(hookGeometry, hookMaterial);
+      leftHookTop.position.copy(gatePos).add(right.clone().multiplyScalar(-8));
+      leftHookTop.position.y = pillarHeight + 2;
+      scene.add(leftHookTop);
+      
+      const rightHookTop = new THREE.Mesh(hookGeometry, hookMaterial);
+      rightHookTop.position.copy(gatePos).add(right.clone().multiplyScalar(8));
+      rightHookTop.position.y = pillarHeight + 2;
+      scene.add(rightHookTop);
+      
+      // チェーンの接続金具（看板側）
+      const leftHookBottom = new THREE.Mesh(hookGeometry, hookMaterial);
+      leftHookBottom.position.copy(gatePos).add(right.clone().multiplyScalar(-8));
+      leftHookBottom.position.y = bannerTopY;
+      scene.add(leftHookBottom);
+      
+      const rightHookBottom = new THREE.Mesh(hookGeometry, hookMaterial);
+      rightHookBottom.position.copy(gatePos).add(right.clone().multiplyScalar(8));
+      rightHookBottom.position.y = bannerTopY;
+      scene.add(rightHookBottom);
+      
+      // 看板の上端に接続リング（視覚的な接続を強調）
+      const ringGeometry = new THREE.TorusGeometry(0.3, 0.08, 8, 16);
+      const ringMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff6b00,
+        metalness: 0.7
+      });
+      
+      const leftRing = new THREE.Mesh(ringGeometry, ringMaterial);
+      leftRing.position.copy(gatePos).add(right.clone().multiplyScalar(-8));
+      leftRing.position.y = bannerTopY;
+      leftRing.rotation.x = Math.PI / 2;
+      scene.add(leftRing);
+      
+      const rightRing = new THREE.Mesh(ringGeometry, ringMaterial);
+      rightRing.position.copy(gatePos).add(right.clone().multiplyScalar(8));
+      rightRing.position.y = bannerTopY;
+      rightRing.rotation.x = Math.PI / 2;
+      scene.add(rightRing);
+      
+      // シーンに布メッシュの参照を保存
+      if (!scene.userData.animatedMeshes) {
+        scene.userData.animatedMeshes = [];
+      }
+      scene.userData.animatedMeshes.push(mesh);
     }
     
     // 左の柱（地面からそびえ立つ）
@@ -259,32 +372,22 @@ export const addCoaster = async (
       capMesh.position.copy(pillarPos);
       capMesh.position.y = pillarHeight + 1;
       scene.add(capMesh);
-      
-      // 柱の土台（ベースプレート）
-      const baseGeometry = new THREE.CylinderGeometry(2, 2.5, 3, 8);
-      const baseMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x666666,
-        metalness: 0.5,
-        roughness: 0.7
-      });
-      const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-      baseMesh.position.copy(pillarPos);
-      baseMesh.position.y = 1.5;
-      scene.add(baseMesh);
     }
     
     // 横梁（上部）- 2本の柱をつなぐ
     {
+      const pillarHeight = 50;
       const beamWidth = 24; // 柱の間の距離
       const beamGeometry = new THREE.BoxGeometry(beamWidth, 1.5, 1.5);
       const beamMaterial = new THREE.MeshPhongMaterial({ 
         color: 0xff6b00,
         emissive: 0x331100,
-        emissiveIntensity: 0.2
+        emissiveIntensity: 0.2,
+        shininess: 30
       });
       const beamMesh = new THREE.Mesh(beamGeometry, beamMaterial);
       beamMesh.position.copy(gatePos);
-      beamMesh.position.y = 52; // 柱の上部
+      beamMesh.position.y = pillarHeight + 2; // 柱の上部
       
       // 横梁を進行方向に対して垂直に配置
       const beamRotation = Math.atan2(right.z, right.x);
@@ -292,66 +395,58 @@ export const addCoaster = async (
       
       scene.add(beamMesh);
       
-      // 装飾用の上部横梁
+      // 装飾用の上部横梁（金色）
       const topBeamGeometry = new THREE.BoxGeometry(beamWidth + 2, 0.8, 2);
-      const topBeamMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+      const topBeamMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xffaa00,
+        emissive: 0x885500,
+        emissiveIntensity: 0.3,
+        shininess: 60
+      });
       const topBeamMesh = new THREE.Mesh(topBeamGeometry, topBeamMaterial);
       topBeamMesh.position.copy(gatePos);
-      topBeamMesh.position.y = 53;
+      topBeamMesh.position.y = pillarHeight + 3.2;
       topBeamMesh.rotation.y = beamRotation;
       scene.add(topBeamMesh);
     }
     
-    // 補強の斜め梁（左側）
+    // ゲート全体を照らすライト
     {
-      const braceGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15, 8);
-      const braceMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xcc5500,
-        metalness: 0.3
-      });
+      // 正面から看板を照らすスポットライト
+      const spotLight1 = new THREE.SpotLight(0xffffff, 1.5);
+      spotLight1.position.copy(gatePos);
+      spotLight1.position.y = gatePos.y + 15;
+      spotLight1.position.add(tangent.clone().multiplyScalar(-10));
+      spotLight1.target.position.copy(gatePos);
+      spotLight1.target.position.y = gatePos.y + 5;
+      spotLight1.angle = Math.PI / 6;
+      spotLight1.penumbra = 0.3;
+      spotLight1.castShadow = false;
+      scene.add(spotLight1);
+      scene.add(spotLight1.target);
       
-      // 左下から右上への斜め梁
-      const braceMesh1 = new THREE.Mesh(braceGeometry, braceMaterial);
-      const leftPillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(-12));
-      braceMesh1.position.copy(leftPillarPos);
-      braceMesh1.position.y = 12;
-      braceMesh1.position.add(right.clone().multiplyScalar(3));
-      braceMesh1.rotation.z = Math.PI / 6; // 30度傾ける
-      scene.add(braceMesh1);
+      // 後ろからも照らす（リムライト効果）
+      const spotLight2 = new THREE.SpotLight(0xffd080, 0.8);
+      spotLight2.position.copy(gatePos);
+      spotLight2.position.y = gatePos.y + 10;
+      spotLight2.position.add(tangent.clone().multiplyScalar(15));
+      spotLight2.target.position.copy(gatePos);
+      spotLight2.target.position.y = gatePos.y + 5;
+      spotLight2.angle = Math.PI / 5;
+      spotLight2.penumbra = 0.4;
+      scene.add(spotLight2);
+      scene.add(spotLight2.target);
       
-      // 左上から右下への斜め梁
-      const braceMesh2 = new THREE.Mesh(braceGeometry, braceMaterial);
-      braceMesh2.position.copy(leftPillarPos);
-      braceMesh2.position.y = 20;
-      braceMesh2.position.add(right.clone().multiplyScalar(3));
-      braceMesh2.rotation.z = -Math.PI / 6; // -30度傾ける
-      scene.add(braceMesh2);
-    }
-    
-    // 補強の斜め梁（右側）
-    {
-      const braceGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15, 8);
-      const braceMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xcc5500,
-        metalness: 0.3
-      });
+      // 柱を照らす左右のライト
+      const leftLight = new THREE.PointLight(0xffaa00, 0.8, 30);
+      leftLight.position.copy(gatePos).add(right.clone().multiplyScalar(-12));
+      leftLight.position.y = 45;
+      scene.add(leftLight);
       
-      // 右下から左上への斜め梁
-      const braceMesh1 = new THREE.Mesh(braceGeometry, braceMaterial);
-      const rightPillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(12));
-      braceMesh1.position.copy(rightPillarPos);
-      braceMesh1.position.y = 12;
-      braceMesh1.position.add(right.clone().multiplyScalar(-3));
-      braceMesh1.rotation.z = -Math.PI / 6; // -30度傾ける
-      scene.add(braceMesh1);
-      
-      // 右上から左下への斜め梁
-      const braceMesh2 = new THREE.Mesh(braceGeometry, braceMaterial);
-      braceMesh2.position.copy(rightPillarPos);
-      braceMesh2.position.y = 20;
-      braceMesh2.position.add(right.clone().multiplyScalar(-3));
-      braceMesh2.rotation.z = Math.PI / 6; // 30度傾ける
-      scene.add(braceMesh2);
+      const rightLight = new THREE.PointLight(0xffaa00, 0.8, 30);
+      rightLight.position.copy(gatePos).add(right.clone().multiplyScalar(12));
+      rightLight.position.y = 45;
+      scene.add(rightLight);
     }
   }
 

@@ -100,6 +100,7 @@ const lookAt = new THREE.Vector3();
 
 let velocity = 0;
 let progress = 0;
+let prevProgress = 0;
 
 let prevTime = performance.now();
 
@@ -107,6 +108,7 @@ renderer.setAnimationLoop(() => {
 	const time = performance.now();
 	const delta = time - prevTime;
 
+	prevProgress = progress;
 	progress += velocity;
 	progress = progress % 1;
 
@@ -115,11 +117,73 @@ renderer.setAnimationLoop(() => {
 	train.position.copy(position);
 	tangent.copy(curve.getTangentAt(progress));
 
-	velocity -= tangent.y * 0.0000001 * delta;
-	const vmin = 0.00004;
-	const vmax = 0.0002;
+	velocity -= tangent.y * 0.0000008 * delta; // 8倍（0.0000001 * 8）
+	const vmin = 0.00032; // 8倍（0.00004 * 8）
+	const vmax = 0.0016; // 8倍（0.0002 * 8）
 	velocity = Math.max(vmin, Math.min(vmax, velocity));
 	train.lookAt(lookAt.copy(position).sub(tangent));
+
+	// 看板の文字切り替え（スタート/ゴール）
+	if (scene.userData.signControl) {
+		const signControl = scene.userData.signControl;
+		
+		// 一周したことを検出（progress が 1.0 を超えて 0 に戻った）
+		const hasLooped = prevProgress > 0.8 && progress < 0.2;
+		
+		// ゴールエリアに入ったらゴールに切り替え
+		if (progress >= 0.85 && !signControl.isGoal) {
+			signControl.updateTexture(signControl.texture, '🦀ゴール🦀');
+			signControl.material.emissiveMap = signControl.texture;
+			signControl.isGoal = true;
+		} 
+		// 一周してスタートエリアを通過したらスタートに戻す
+		else if (hasLooped && signControl.isGoal && progress > 0.4) {
+			signControl.updateTexture(signControl.texture, '🦀スタート🦀');
+			signControl.material.emissiveMap = signControl.texture;
+			signControl.isGoal = false;
+		}
+	}
+
+	// 布のアニメーション
+	if (scene.userData.animatedMeshes) {
+		scene.userData.animatedMeshes.forEach(mesh => {
+			if (mesh.userData.isCloth) {
+				mesh.userData.time += delta * 0.001;
+				const t = mesh.userData.time;
+				
+				const geometry = mesh.geometry;
+				const positions = geometry.attributes.position;
+				const originalPositions = geometry.userData.originalPositions;
+				
+				// 各頂点を波打たせる（下半分のみ）
+				for (let i = 0; i < positions.count; i++) {
+					const i3 = i * 3;
+					const x = originalPositions[i3];
+					const y = originalPositions[i3 + 1];
+					
+					// 上半分（y > 0）は固定、下半分（y <= 0）のみ動かす
+					if (y <= 0) {
+						// y座標に応じて動きの強さを変える（上部:0 → 下部:1）
+						const heightFactor = Math.abs(y / 5); // 0から1の範囲
+						
+						// 風による波の効果
+						const wave1 = Math.sin(x * 0.3 + t * 2) * 0.4;
+						const wave2 = Math.cos(y * 0.4 + t * 1.5) * 0.3;
+						const wave3 = Math.sin(x * 0.2 + y * 0.3 + t * 2.5) * 0.5;
+						
+						// Z軸方向に波打たせる（高さによって強度を調整）
+						positions.setZ(i, (wave1 + wave2 + wave3) * heightFactor);
+					} else {
+						// 上半分は元の位置に固定（チェーンに接続されている）
+						positions.setZ(i, originalPositions[i3 + 2]);
+					}
+				}
+				
+				positions.needsUpdate = true;
+				geometry.computeVertexNormals();
+			}
+		});
+	}
 
 	renderer.render(scene, camera);
 	prevTime = time;
