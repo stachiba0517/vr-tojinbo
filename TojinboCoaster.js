@@ -159,34 +159,11 @@ export const addCoaster = async (
     const up = new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
     
-    // カニのロゴ用Canvas
-    const createCrabCanvas = () => {
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.width = 256;
-      canvas.height = 256;
-      
-      // 背景
-      context.fillStyle = '#ff6b00';
-      context.beginPath();
-      context.arc(128, 128, 120, 0, Math.PI * 2);
-      context.fill();
-      
-      // カニの絵文字風イラスト
-      context.fillStyle = '#ffffff';
-      context.font = 'bold 150px Arial';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText('🦀', 128, 138);
-      
-      return canvas;
-    };
-    
     // スタート看板用Canvas
     const createStartSignCanvas = () => {
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
-      canvas.width = 512;
+      canvas.width = 400;
       canvas.height = 256;
       
       // 背景（看板の板）
@@ -195,62 +172,19 @@ export const addCoaster = async (
       
       // 枠線
       context.strokeStyle = '#ff6b00';
-      context.lineWidth = 15;
+      context.lineWidth = 10;
       context.strokeRect(7, 7, canvas.width - 14, canvas.height - 14);
       
-      // テキスト
+      // テキスト（中央）
       context.fillStyle = '#ff0000';
-      context.font = 'bold 100px Arial';
+      context.font = 'bold 70px Arial';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      context.fillText('スタート', canvas.width / 2, canvas.height / 2);
+      context.fillText('🦀スタート🦀', canvas.width / 2, canvas.height / 2);
       
+
       return canvas;
     };
-    
-    // 左側のカニロゴ
-    {
-      const canvas = createCrabCanvas();
-      const texture = new THREE.CanvasTexture(canvas);
-      const geometry = new THREE.PlaneGeometry(6, 6);
-      const material = new THREE.MeshBasicMaterial({ 
-        map: texture, 
-        side: THREE.DoubleSide,
-        transparent: true
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      
-      // 左側に配置
-      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(-12));
-      mesh.position.y = gatePos.y + 8;
-      
-      const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
-      mesh.lookAt(lookAtPos);
-      
-      scene.add(mesh);
-    }
-    
-    // 右側のカニロゴ
-    {
-      const canvas = createCrabCanvas();
-      const texture = new THREE.CanvasTexture(canvas);
-      const geometry = new THREE.PlaneGeometry(6, 6);
-      const material = new THREE.MeshBasicMaterial({ 
-        map: texture, 
-        side: THREE.DoubleSide,
-        transparent: true
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      
-      // 右側に配置
-      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(12));
-      mesh.position.y = gatePos.y + 8;
-      
-      const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
-      mesh.lookAt(lookAtPos);
-      
-      scene.add(mesh);
-    }
     
     // 中央のスタート看板
     {
@@ -273,28 +207,58 @@ export const addCoaster = async (
       scene.add(mesh);
     }
     
-    // 左の柱
+    // 左の柱（地面からそびえ立つ）
     {
-      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 15, 16);
-      const material = new THREE.MeshPhongMaterial({ color: 0xff6b00 });
+      const pillarHeight = 50; // 柱の高さ
+      const geometry = new THREE.CylinderGeometry(1, 1.5, pillarHeight, 16);
+      const material = new THREE.MeshPhongMaterial({ 
+        color: 0xff6b00,
+        emissive: 0x331100,
+        emissiveIntensity: 0.2
+      });
       const mesh = new THREE.Mesh(geometry, material);
       
-      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(-12));
-      mesh.position.y = gatePos.y;
+      // 左側に配置、地面から立つ
+      const pillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(-12));
+      mesh.position.copy(pillarPos);
+      mesh.position.y = pillarHeight / 2; // 地面から立つように調整
       
       scene.add(mesh);
+      
+      // 柱の上のキャップ
+      const capGeometry = new THREE.CylinderGeometry(1.5, 1, 2, 16);
+      const capMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+      const capMesh = new THREE.Mesh(capGeometry, capMaterial);
+      capMesh.position.copy(pillarPos);
+      capMesh.position.y = pillarHeight + 1;
+      scene.add(capMesh);
     }
     
-    // 右の柱
+    // 右の柱（地面からそびえ立つ）
     {
-      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 15, 16);
-      const material = new THREE.MeshPhongMaterial({ color: 0xff6b00 });
+      const pillarHeight = 50; // 柱の高さ
+      const geometry = new THREE.CylinderGeometry(1, 1.5, pillarHeight, 16);
+      const material = new THREE.MeshPhongMaterial({ 
+        color: 0xff6b00,
+        emissive: 0x331100,
+        emissiveIntensity: 0.2
+      });
       const mesh = new THREE.Mesh(geometry, material);
       
-      mesh.position.copy(gatePos).add(right.clone().multiplyScalar(12));
-      mesh.position.y = gatePos.y;
+      // 右側に配置、地面から立つ
+      const pillarPos = new THREE.Vector3().copy(gatePos).add(right.clone().multiplyScalar(12));
+      mesh.position.copy(pillarPos);
+      mesh.position.y = pillarHeight / 2; // 地面から立つように調整
       
       scene.add(mesh);
+      
+      // 柱の上のキャップ
+      const capGeometry = new THREE.CylinderGeometry(1.5, 1, 2, 16);
+      const capMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+      const capMesh = new THREE.Mesh(capGeometry, capMaterial);
+      capMesh.position.copy(pillarPos);
+      capMesh.position.y = pillarHeight + 1;
+      scene.add(capMesh);
     }
   }
 
