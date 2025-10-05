@@ -183,14 +183,13 @@ export const addCoaster = async (
     });
     const mesh = new THREE.Mesh(geometry, material);
     
-    // 看板の位置
-    mesh.position.copy(startPos);
+    // 看板の位置：スタート地点の少し手前（進行方向の逆方向）に配置
+    const signOffset = new THREE.Vector3().copy(tangent).multiplyScalar(15); // 進行方向に15m先
+    mesh.position.copy(startPos).add(signOffset);
     mesh.position.y += 10; // レールの10m上空
     
-    // 進行方向を向くように回転
-    // tangentベクトルを使って看板を回転させる
-    const up = new THREE.Vector3(0, 1, 0);
-    const lookAtPos = new THREE.Vector3().copy(startPos).add(tangent);
+    // 進行方向の逆を向くように回転（コースターから看板が見えるように）
+    const lookAtPos = new THREE.Vector3().copy(mesh.position).sub(tangent);
     mesh.lookAt(lookAtPos);
     
     scene.add(mesh);
