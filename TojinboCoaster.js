@@ -12,13 +12,100 @@ import { PromiseGLTFLoader } from "./PromiseGLTFLoader.js";
 export class Curve {
 	vector = new THREE.Vector3();
 	vector2 = new THREE.Vector3();
+  
+  // ループの開始と終了位置
+  loopStart = 0.45;
+  loopEnd = 0.55;
+  loopRadius = 15; // ループの半径
+  
   getPointAt(t) {
-    t *= Math.PI;
-    const x = Math.sin(t * 4) * 40;
-    const y = Math.sin(t * 10) * 6 + 32;
-    const z = Math.cos(t * 2) * 40;
+    // 通常のコース
+    const tScaled = t * Math.PI;
+    const baseX = Math.sin(tScaled * 4) * 40;
+    const baseY = Math.sin(tScaled * 10) * 6 + 32;
+    const baseZ = Math.cos(tScaled * 2) * 40;
+    
+    // ループ区間の処理
+    if (t >= this.loopStart && t <= this.loopEnd) {
+      return this.getLoopPoint(t);
+    }
+    
+    return this.vector.set(baseX, baseY, baseZ);
+  }
+  
+  getLoopPoint(t) {
+    // ループ内での進行度（0から1）
+    const rawProgress = (t - this.loopStart) / (this.loopEnd - this.loopStart);
+    
+    // 滑らかなイージング（smoothstep関数）を適用
+    const loopProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+    
+    // 通常コースの位置を取得（現在のt値から）
+    const tScaled = t * Math.PI;
+    const baseX = Math.sin(tScaled * 4) * 40;
+    const baseY = Math.sin(tScaled * 10) * 6 + 32;
+    const baseZ = Math.cos(tScaled * 2) * 40;
+    
+    // ループの開始点での通常コースの位置
+    const tScaledStart = this.loopStart * Math.PI;
+    const startX = Math.sin(tScaledStart * 4) * 40;
+    const startY = Math.sin(tScaledStart * 10) * 6 + 32;
+    const startZ = Math.cos(tScaledStart * 2) * 40;
+    
+    // 進行方向ベクトルを計算（微分）
+    const dx = Math.cos(tScaledStart * 4) * 4;
+    const dy = Math.cos(tScaledStart * 10) * 10;
+    const dz = -Math.sin(tScaledStart * 2) * 2;
+    
+    // 進行方向を正規化
+    const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const forwardX = dx / dirLength;
+    const forwardY = dy / dirLength;
+    const forwardZ = dz / dirLength;
+    
+    // 右方向ベクトル（進行方向と世界の上方向の外積）
+    const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+    const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
+    const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
+    const rightZ = forwardX * worldUpY - forwardY * worldUpX;
+    
+    // 右方向を正規化
+    const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+    const normRightX = rightX / rightLength;
+    const normRightY = rightY / rightLength;
+    const normRightZ = rightZ / rightLength;
+    
+    // ローカル上方向（右方向と進行方向の外積）
+    const localUpX = normRightY * forwardZ - normRightZ * forwardY;
+    const localUpY = normRightZ * forwardX - normRightX * forwardZ;
+    const localUpZ = normRightX * forwardY - normRightY * forwardX;
+    
+    // ループの角度（-π/2から開始して一周）下から入って上へ
+    const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
+    
+    // ループの横方向のオフセット（徐々に右にずれていく）
+    const horizontalShift = loopProgress * this.loopRadius * 2; // 入口(0)から出口(2*radius)まで
+    
+    // ループの中心位置（進行に応じて横にずれる）
+    const centerX = startX + localUpX * this.loopRadius + normRightX * horizontalShift;
+    const centerY = startY + localUpY * this.loopRadius + normRightY * horizontalShift;
+    const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * horizontalShift;
+    
+    // 円周上の位置を計算
+    const loopX = centerX + forwardX * Math.cos(loopAngle) * this.loopRadius + localUpX * Math.sin(loopAngle) * this.loopRadius;
+    const loopY = centerY + forwardY * Math.cos(loopAngle) * this.loopRadius + localUpY * Math.sin(loopAngle) * this.loopRadius;
+    const loopZ = centerZ + forwardZ * Math.cos(loopAngle) * this.loopRadius + localUpZ * Math.sin(loopAngle) * this.loopRadius;
+    
+    // 通常コースとループの間を滑らかに補間（rawProgressを使用）
+    const blendFactor = rawProgress < 0.1 ? rawProgress / 0.1 : (rawProgress > 0.9 ? (1 - rawProgress) / 0.1 : 1);
+    
+    const x = baseX * (1 - blendFactor) + loopX * blendFactor;
+    const y = baseY * (1 - blendFactor) + loopY * blendFactor;
+    const z = baseZ * (1 - blendFactor) + loopZ * blendFactor;
+    
     return this.vector.set(x, y, z);
   }
+  
   getTangentAt(t) {
     const delta = 0.0001;
     const t1 = Math.max(0, t - delta);
