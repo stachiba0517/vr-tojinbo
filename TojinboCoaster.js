@@ -33,6 +33,8 @@ export class Curve {
     return this.vector.set(baseX, baseY, baseZ);
   }
   
+
+
   getLoopPoint(t) {
     // ループ内での進行度（0から1）
     const rawProgress = (t - this.loopStart) / (this.loopEnd - this.loopStart);
@@ -83,8 +85,8 @@ export class Curve {
     // ループの角度（-π/2から開始して一周）下から入って上へ
     const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
     
-    // ループの横方向のオフセット（徐々に右にずれていく）
-    const horizontalShift = loopProgress * this.loopRadius * 2; // 入口(0)から出口(2*radius)まで
+    // ループの横方向のオフセット（徐々に左に少しずれていく）
+    const horizontalShift = -loopProgress * this.loopRadius * 0.5; // 入口(0)から出口(-0.5*radius)まで
     
     // ループの中心位置（進行に応じて横にずれる）
     const centerX = startX + localUpX * this.loopRadius + normRightX * horizontalShift;
@@ -337,8 +339,8 @@ export const addCoaster = async (
       const chainGeometry = new THREE.CylinderGeometry(0.08, 0.08, 2.5, 8);
       const chainMaterial = new THREE.MeshPhongMaterial({ 
         color: 0x888888,
-        metalness: 0.8,
-        roughness: 0.3
+        shininess: 60,
+        specular: 0x444444
       });
       
       // 左のチェーン
@@ -357,7 +359,8 @@ export const addCoaster = async (
       const hookGeometry = new THREE.SphereGeometry(0.15, 8, 8);
       const hookMaterial = new THREE.MeshPhongMaterial({ 
         color: 0xcccccc,
-        metalness: 0.9
+        shininess: 80,
+        specular: 0x888888
       });
       
       const leftHookTop = new THREE.Mesh(hookGeometry, hookMaterial);
@@ -385,7 +388,8 @@ export const addCoaster = async (
       const ringGeometry = new THREE.TorusGeometry(0.3, 0.08, 8, 16);
       const ringMaterial = new THREE.MeshPhongMaterial({ 
         color: 0xff6b00,
-        metalness: 0.7
+        shininess: 50,
+        specular: 0xcc5500
       });
       
       const leftRing = new THREE.Mesh(ringGeometry, ringMaterial);

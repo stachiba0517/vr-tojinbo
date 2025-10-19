@@ -68,9 +68,6 @@ const btn = VRButton.createButton(renderer);
 btn.addEventListener("click", () => {
 	start();
 });
-document.body.onclick = () => {
-	start();
-};
 document.body.appendChild(btn);
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
@@ -101,27 +98,120 @@ const lookAt = new THREE.Vector3();
 let velocity = 0;
 let progress = 0;
 let prevProgress = 0;
+let isMoving = false; // 移動状態のフラグ
+let hasStarted = false; // スタート済みかどうか
 
 let prevTime = performance.now();
+
+// クリックで発車
+renderer.domElement.addEventListener('click', (event) => {
+	if (!isMoving) {
+		start();
+		isMoving = true;
+		hasStarted = true;
+		velocity = 0.0008; // 初速度
+		console.log("発車！");
+	}
+});
 
 renderer.setAnimationLoop(() => {
 	const time = performance.now();
 	const delta = time - prevTime;
 
+	// 速度の範囲
+	const vmin = 0.00032; // 最小速度
+	const vmax = 0.0016; // 最大速度
+
+	// 1周したことを検出
+	const hasLooped = prevProgress > 0.8 && progress < 0.2;
+	
+	// 1周したら自動停止
+	if (hasLooped && hasStarted) {
+		isMoving = false;
+		hasStarted = false;
+		velocity = 0;
+		console.log("1周完了！停止しました");
+	}
+
 	prevProgress = progress;
-	progress += velocity;
-	progress = progress % 1;
+	
+	// 移動中のみprogressを更新
+	if (isMoving) {
+		progress += velocity;
+		progress = progress % 1;
+	}
 
 	position.copy(curve.getPointAt(progress));
 	position.y += 0.6; // the eyes point height from the rail
 	train.position.copy(position);
 	tangent.copy(curve.getTangentAt(progress));
 
-	velocity -= tangent.y * 0.0000008 * delta; // 8倍（0.0000001 * 8）
-	const vmin = 0.00032; // 8倍（0.00004 * 8）
-	const vmax = 0.0016; // 8倍（0.0002 * 8）
-	velocity = Math.max(vmin, Math.min(vmax, velocity));
-	train.lookAt(lookAt.copy(position).sub(tangent));
+	// 移動中のみ速度を計算
+	if (isMoving) {
+		velocity -= tangent.y * 0.0000008 * delta;
+		velocity = Math.max(vmin, Math.min(vmax, velocity));
+	}
+
+	// カメラを進行方向に向ける（VRモードでない場合）
+	if (!renderer.xr.isPresenting) {
+		// ループ区間でのupベクトルの計算
+		let upVector = new THREE.Vector3(0, 1, 0);
+		
+		if (progress >= curve.loopStart && progress <= curve.loopEnd) {
+			// ループ内での進行度
+			const loopProgress = (progress - curve.loopStart) / (curve.loopEnd - curve.loopStart);
+			const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
+			
+			// ループの開始点での通常コースの位置
+			const tScaledStart = curve.loopStart * Math.PI;
+			const dx = Math.cos(tScaledStart * 4) * 4;
+			const dy = Math.cos(tScaledStart * 10) * 10;
+			const dz = -Math.sin(tScaledStart * 2) * 2;
+			
+			const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+			const forwardX = dx / dirLength;
+			const forwardY = dy / dirLength;
+			const forwardZ = dz / dirLength;
+			
+			const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+			const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
+			const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
+			const rightZ = forwardX * worldUpY - forwardY * worldUpX;
+			
+			const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+			const normRightX = rightX / rightLength;
+			const normRightY = rightY / rightLength;
+			const normRightZ = rightZ / rightLength;
+			
+			const localUpX = normRightY * forwardZ - normRightZ * forwardY;
+			const localUpY = normRightZ * forwardX - normRightX * forwardZ;
+			const localUpZ = normRightX * forwardY - normRightY * forwardX;
+			
+			// ループの中心から外側への方向がupベクトル
+			const radialX = forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle);
+			const radialY = forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle);
+			const radialZ = forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle);
+			
+			// 外側から中心への方向がupベクトル（頭の方向）
+			upVector.set(-radialX, -radialY, -radialZ).normalize();
+		}
+		
+		// 正しい座標系を構築
+		// forward = tangent (進行方向 = Z軸の逆)
+		// up = upVector (頭の方向 = Y軸)
+		// right = tangent × upVector (右方向 = X軸)
+		const forward = tangent.clone().normalize();
+		const right = new THREE.Vector3().crossVectors(forward, upVector).normalize();
+		const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+		
+		// 回転行列を作成（Three.jsのカメラは-Z方向を見る）
+		const matrix = new THREE.Matrix4();
+		matrix.makeBasis(right, up, forward.clone().negate());
+		train.quaternion.setFromRotationMatrix(matrix);
+		
+		// カメラのローカル回転はリセット
+		camera.rotation.set(0, 0, 0);
+	}
 
 	// 看板の文字切り替え（スタート/ゴール）
 	if (scene.userData.signControl) {
