@@ -9,16 +9,24 @@ import {
 import { PromiseGLTFLoader } from "./PromiseGLTFLoader.js";
 //import { makeMeshSkyGround } from "./makeMeshSkyGround.js";
 
-export class Curve {
+export class Curve extends THREE.Curve {
 	vector = new THREE.Vector3();
 	vector2 = new THREE.Vector3();
+	vector3 = new THREE.Vector3();
+  _isLogging = false; // 無限再帰防止フラグ
   
   // ループの開始と終了位置
   loopStart = 0.45;
   loopEnd = 0.55;
   loopRadius = 15; // ループの半径
   
-  getPointAt(t) {
+  // THREE.Curveの必須メソッド
+  getPoint(t, optionalTarget = new THREE.Vector3()) {
+    return this.getPointAt(t, optionalTarget);
+  }
+  
+  getPointAt(t, optionalTarget) {
+    const target = optionalTarget || this.vector;
     // 通常のコース
     const tScaled = t * Math.PI;
     const baseX = Math.sin(tScaled * 4) * 40;
@@ -27,15 +35,16 @@ export class Curve {
     
     // ループ区間の処理
     if (t >= this.loopStart && t <= this.loopEnd) {
-      return this.getLoopPoint(t);
+      return this.getLoopPoint(t, target);
     }
     
-    return this.vector.set(baseX, baseY, baseZ);
+    return target.set(baseX, baseY, baseZ);
   }
   
 
 
-  getLoopPoint(t) {
+  getLoopPoint(t, optionalTarget) {
+    const target = optionalTarget || this.vector;
     // ループ内での進行度（0から1）
     const rawProgress = (t - this.loopStart) / (this.loopEnd - this.loopStart);
     
@@ -85,27 +94,51 @@ export class Curve {
     // ループの角度（-π/2から開始して一周）下から入って上へ
     const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
     
-    // ループの横方向のオフセット（徐々に左に少しずれていく）
-    const horizontalShift = -loopProgress * this.loopRadius * 0.5; // 入口(0)から出口(-0.5*radius)まで
-    
-    // ループの中心位置（進行に応じて横にずれる）
-    const centerX = startX + localUpX * this.loopRadius + normRightX * horizontalShift;
-    const centerY = startY + localUpY * this.loopRadius + normRightY * horizontalShift;
-    const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * horizontalShift;
+    // ループの中心位置（固定）
+    const centerX = startX + localUpX * this.loopRadius;
+    const centerY = startY + localUpY * this.loopRadius;
+    const centerZ = startZ + localUpZ * this.loopRadius;
     
     // 円周上の位置を計算
     const loopX = centerX + forwardX * Math.cos(loopAngle) * this.loopRadius + localUpX * Math.sin(loopAngle) * this.loopRadius;
     const loopY = centerY + forwardY * Math.cos(loopAngle) * this.loopRadius + localUpY * Math.sin(loopAngle) * this.loopRadius;
     const loopZ = centerZ + forwardZ * Math.cos(loopAngle) * this.loopRadius + localUpZ * Math.sin(loopAngle) * this.loopRadius;
     
-    // 通常コースとループの間を滑らかに補間（rawProgressを使用）
-    const blendFactor = rawProgress < 0.1 ? rawProgress / 0.1 : (rawProgress > 0.9 ? (1 - rawProgress) / 0.1 : 1);
+    // 通常コースとループの間を滑らかに補間
+    // 入口と出口でsmoothstepを使用してより滑らかに
+    const blendStart = 0.15; // 入口のブレンド範囲を広げる
+    const blendEnd = 0.85;   // 出口のブレンド範囲を広げる
+    
+    let blendFactor;
+    if (rawProgress < blendStart) {
+      // 入口: 0から1への滑らかな遷移（smoothstep）
+      const t = rawProgress / blendStart;
+      blendFactor = t * t * (3 - 2 * t);
+    } else if (rawProgress > blendEnd) {
+      // 出口: 1から0への滑らかな遷移（smoothstep）
+      const t = (1 - rawProgress) / (1 - blendEnd);
+      blendFactor = t * t * (3 - 2 * t);
+    } else {
+      // 中間: 完全にループ
+      blendFactor = 1;
+    }
     
     const x = baseX * (1 - blendFactor) + loopX * blendFactor;
     const y = baseY * (1 - blendFactor) + loopY * blendFactor;
     const z = baseZ * (1 - blendFactor) + loopZ * blendFactor;
     
-    return this.vector.set(x, y, z);
+    // デバッグ：レールの位置関係を出力（0.01刻み）
+    const tRounded = Math.round(t * 100) / 100;
+    if (Math.abs(t - tRounded) < 0.0001 && !this._isLogging) {
+      this._isLogging = true;
+      
+      // レールは常に上（頭上）に固定
+      console.log(`t=${t.toFixed(2)} レールは上（頭上）`);
+      
+      this._isLogging = false;
+    }
+    
+    return target.set(x, y, z);
   }
   
   getTangentAt(t) {
@@ -113,6 +146,229 @@ export class Curve {
     const t1 = Math.max(0, t - delta);
     const t2 = Math.min(1, t + delta);
     return this.vector2.copy(this.getPointAt(t2)).sub(this.getPointAt(t1)).normalize();
+  }
+  
+  // レールの「上方向」を明示的に指定するメソッド
+  getBinormalAt(t) {
+    // ループ区間の場合
+    if (t >= this.loopStart && t <= this.loopEnd) {
+      // ループ内での進行度（0から1）
+      const rawProgress = (t - this.loopStart) / (this.loopEnd - this.loopStart);
+      const loopProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+      
+      // ループの角度（-π/2から開始して2π回転）
+      const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
+      
+      // ループ開始点での座標系（ループ平面の基準）
+      const tScaledStart = this.loopStart * Math.PI;
+      
+      const dx = Math.cos(tScaledStart * 4) * 4;
+      const dy = Math.cos(tScaledStart * 10) * 10;
+      const dz = -Math.sin(tScaledStart * 2) * 2;
+      
+      const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const forwardX = dx / dirLength;
+      const forwardY = dy / dirLength;
+      const forwardZ = dz / dirLength;
+      
+      const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+      const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
+      const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
+      const rightZ = forwardX * worldUpY - forwardY * worldUpX;
+      
+      const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+      const normRightX = rightX / rightLength;
+      const normRightY = rightY / rightLength;
+      const normRightZ = rightZ / rightLength;
+      
+      const localUpX = normRightY * forwardZ - normRightZ * forwardY;
+      const localUpY = normRightZ * forwardX - normRightX * forwardZ;
+      const localUpZ = normRightX * forwardY - normRightY * forwardX;
+      
+      // ループのbinormal（下方向）を計算
+      // 通常区間：binormal = 下、カメラはbinormalの正の方向 = レールの下から上を見る
+      // ループ区間：binormal = 内向き、カメラはbinormalの正の方向 = 内側から外側を見る
+      // つまり、binormalは「ループの中心から外向き」の逆 = 内向き
+      
+      const binormalX = -(forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle));
+      const binormalY = -(forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle));
+      const binormalZ = -(forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle));
+      
+      // デバッグ出力
+      const tRounded = Math.round(t * 100) / 100;
+      if (Math.abs(t - tRounded) < 0.0001) {
+        console.log(`t=${t.toFixed(2)} angle=${(loopAngle * 180 / Math.PI).toFixed(0)}° binormal=(${binormalX.toFixed(2)}, ${binormalY.toFixed(2)}, ${binormalZ.toFixed(2)})`);
+      }
+      
+      return this.vector3.set(binormalX, binormalY, binormalZ).normalize();
+    }
+    
+    // 遷移範囲の計算（ループ外）
+    const transitionRange = 0.03;
+    const tScaledStart = this.loopStart * Math.PI;
+    const startX = Math.sin(tScaledStart * 4) * 40;
+    const startY = Math.sin(tScaledStart * 10) * 6 + 32;
+    const startZ = Math.cos(tScaledStart * 2) * 40;
+    
+    const dx = Math.cos(tScaledStart * 4) * 4;
+    const dy = Math.cos(tScaledStart * 10) * 10;
+    const dz = -Math.sin(tScaledStart * 2) * 2;
+    
+    const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const forwardX = dx / dirLength;
+    const forwardY = dy / dirLength;
+    const forwardZ = dz / dirLength;
+    
+    const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+    const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
+    const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
+    const rightZ = forwardX * worldUpY - forwardY * worldUpX;
+    
+    const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+    const normRightX = rightX / rightLength;
+    const normRightY = rightY / rightLength;
+    const normRightZ = rightZ / rightLength;
+    
+    const localUpX = normRightY * forwardZ - normRightZ * forwardY;
+    const localUpY = normRightZ * forwardX - normRightX * forwardZ;
+    const localUpZ = normRightX * forwardY - normRightY * forwardX;
+    
+    // 遷移範囲（ループ開始前）では、ループ開始時点のlocalUp方向を返す
+    // これにより、通常コースからループ座標系への滑らかな遷移が可能になる
+    if (t >= this.loopStart - transitionRange && t < this.loopStart) {
+      // ループ開始時点での上方向（localUp）を返す
+      return this.vector3.set(localUpX, localUpY, localUpZ).normalize();
+    }
+    
+    // ループ終了後の遷移範囲でも同様
+    if (t > this.loopEnd && t <= this.loopEnd + transitionRange) {
+      // ループ終了時点での座標系を計算
+      const tScaledEnd = this.loopEnd * Math.PI;
+      const dxEnd = Math.cos(tScaledEnd * 4) * 4;
+      const dyEnd = Math.cos(tScaledEnd * 10) * 10;
+      const dzEnd = -Math.sin(tScaledEnd * 2) * 2;
+      
+      const dirLengthEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd + dzEnd * dzEnd);
+      const forwardXEnd = dxEnd / dirLengthEnd;
+      const forwardYEnd = dyEnd / dirLengthEnd;
+      const forwardZEnd = dzEnd / dirLengthEnd;
+      
+      const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+      const rightXEnd = forwardYEnd * worldUpZ - forwardZEnd * worldUpY;
+      const rightYEnd = forwardZEnd * worldUpX - forwardXEnd * worldUpZ;
+      const rightZEnd = forwardXEnd * worldUpY - forwardYEnd * worldUpX;
+      
+      const rightLengthEnd = Math.sqrt(rightXEnd * rightXEnd + rightYEnd * rightYEnd + rightZEnd * rightZEnd);
+      const normRightXEnd = rightXEnd / rightLengthEnd;
+      const normRightYEnd = rightYEnd / rightLengthEnd;
+      const normRightZEnd = rightZEnd / rightLengthEnd;
+      
+      const localUpXEnd = normRightYEnd * forwardZEnd - normRightZEnd * forwardYEnd;
+      const localUpYEnd = normRightZEnd * forwardXEnd - normRightXEnd * forwardZEnd;
+      const localUpZEnd = normRightXEnd * forwardYEnd - normRightYEnd * forwardXEnd;
+      
+      return this.vector3.set(localUpXEnd, localUpYEnd, localUpZEnd).normalize();
+    }
+    
+    // 通常区間では世界の上方向を返す
+    return this.vector3.set(0, 1, 0);
+  }
+  
+  // パラレルトランスポート方式でフレームを計算
+  // TubeGeometryと同じ方式で、ねじれを最小化
+  computeFrenetFrames(segments, closed) {
+    const tangents = [];
+    const normals = [];
+    const binormals = [];
+    
+    // 各点での接線を計算
+    for (let i = 0; i <= segments; i++) {
+      const u = i / segments;
+      tangents[i] = this.getTangentAt(u).clone();
+    }
+    
+    // 初期フレームを設定
+    const normal = new THREE.Vector3();
+    let min = Number.MAX_VALUE;
+    const tx = Math.abs(tangents[0].x);
+    const ty = Math.abs(tangents[0].y);
+    const tz = Math.abs(tangents[0].z);
+    
+    if (tx <= min) {
+      min = tx;
+      normal.set(1, 0, 0);
+    }
+    if (ty <= min) {
+      min = ty;
+      normal.set(0, 1, 0);
+    }
+    if (tz <= min) {
+      normal.set(0, 0, 1);
+    }
+    
+    const vec = new THREE.Vector3().crossVectors(tangents[0], normal).normalize();
+    normals[0] = new THREE.Vector3().crossVectors(tangents[0], vec);
+    binormals[0] = new THREE.Vector3().crossVectors(tangents[0], normals[0]);
+    
+    // パラレルトランスポート方式で各点のフレームを計算
+    for (let i = 1; i <= segments; i++) {
+      const u = i / segments;
+      
+      // パラレルトランスポートで法線を計算（すべての点で）
+      normals[i] = normals[i - 1].clone();
+      
+      const axis = new THREE.Vector3().crossVectors(tangents[i - 1], tangents[i]);
+      
+      if (axis.length() > Number.EPSILON) {
+        axis.normalize();
+        const theta = Math.acos(THREE.MathUtils.clamp(tangents[i - 1].dot(tangents[i]), -1, 1));
+        normals[i].applyAxisAngle(axis, theta);
+      }
+      
+      binormals[i] = new THREE.Vector3().crossVectors(tangents[i], normals[i]);
+    }
+    
+    // ループ区間では、パラレルトランスポートの結果を完全に上書き
+    for (let i = 0; i <= segments; i++) {
+      const u = i / segments;
+      
+      if (u >= this.loopStart && u <= this.loopEnd) {
+        // ループ用の幾何学的に正しい上方向を取得
+        const loopBinormal = this.getBinormalAt(u);
+        // 正しい外積の順序: normal = binormal × tangent
+        const loopNormal = new THREE.Vector3().crossVectors(loopBinormal, tangents[i]).normalize();
+        
+        // 完全に上書き（ブレンドなし）
+        binormals[i].copy(loopBinormal);
+        normals[i].copy(loopNormal);
+      }
+    }
+    
+    // 閉じたカーブの場合、最初と最後のフレームを一致させる
+    // ただし、ループ区間は除外
+    if (closed === true) {
+      let theta = Math.acos(THREE.MathUtils.clamp(normals[0].dot(normals[segments]), -1, 1));
+      theta /= segments;
+      
+      if (tangents[0].dot(new THREE.Vector3().crossVectors(normals[0], normals[segments])) > 0) {
+        theta = -theta;
+      }
+      
+      for (let i = 1; i <= segments; i++) {
+        const u = i / segments;
+        // ループ区間は除外
+        if (u < this.loopStart || u > this.loopEnd) {
+          normals[i].applyAxisAngle(tangents[i], theta * i);
+          binormals[i].crossVectors(tangents[i], normals[i]);
+        }
+      }
+    }
+    
+    return {
+      tangents: tangents,
+      normals: normals,
+      binormals: binormals
+    };
   }
 }
 
@@ -162,50 +418,6 @@ export const addCoaster = async (
 
   scene.add(glb.scene);
 
-  /*
-  { // environment
-    const geometry = new THREE.PlaneGeometry(500, 500, 15, 15);
-    geometry.rotateX(- Math.PI / 2);
-
-    const positions = geometry.attributes.position.array;
-    const vertex = new THREE.Vector3();
-
-    for (let i = 0; i < positions.length; i += 3) {
-      vertex.fromArray(positions, i);
-      vertex.x += Math.random() * 10 - 5;
-      vertex.z += Math.random() * 10 - 5;
-      const distance = (vertex.distanceTo(scene.position) / 5) - 25;
-      vertex.y = Math.random() * Math.max(0, distance);
-      vertex.toArray(positions, i);
-    }
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshLambertMaterial({
-      color: 0x407000
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
-    
-    { // trees
-      const geometry = new TreesGeometry(mesh);
-      const material = new THREE.MeshBasicMaterial({
-        side: THREE.DoubleSide, vertexColors: true
-      });
-      const mesh2 = new THREE.Mesh(geometry, material);
-      scene.add(mesh2);
-    }
-  }
-  */
-  /*
-  { // sky
-    const geometry = new SkyGeometry();
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
-  }
-  */
-
-  //
 
 
   {
@@ -223,17 +435,6 @@ export const addCoaster = async (
     mesh.position.y = 0.1;
     scene.add(mesh);
   }
-  /*
-  { // shadow
-    const geometry = new RollerCoasterShadowGeometry(curve, 500);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0x305000, depthWrite: false, transparent: true
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = 0.1;
-    scene.add(mesh);
-  }
-  */
 
   // スタートゲート（門）の作成
   {
@@ -541,29 +742,4 @@ export const addCoaster = async (
     }
   }
 
-
-  /*
-  const funfairs = [];
-  { // funfairs
-    const geometry = new THREE.CylinderGeometry(10, 10, 5, 15);
-    const material = new THREE.MeshLambertMaterial({
-      color: 0xff8080
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(- 80, 10, - 70);
-    mesh.rotation.x = Math.PI / 2;
-    scene.add(mesh);
-    funfairs.push(mesh);
-  }
-  {
-    const geometry = new THREE.CylinderGeometry(5, 6, 4, 10);
-    const material = new THREE.MeshLambertMaterial({
-      color: 0x8080ff
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(50, 2, 30);
-    scene.add(mesh);
-    funfairs.push(mesh);
-  }
-  */
 };

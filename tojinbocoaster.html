@@ -89,6 +89,10 @@ if (vbmode) {
 const train = new THREE.Object3D();
 scene.add(train);
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+// カメラをbinormalの正の方向に配置
+// 通常区間：binormalは下なので、カメラは下（+0.6）= レールの下から上を見る
+// ループ区間：binormalは内向きなので、カメラは内側（+0.6）= 内側から外を見る
+camera.position.set(0, 0.6, 0);
 train.add(camera);
 
 const position = new THREE.Vector3();
@@ -103,14 +107,66 @@ let hasStarted = false; // スタート済みかどうか
 
 let prevTime = performance.now();
 
-// クリックで発車
-renderer.domElement.addEventListener('click', (event) => {
+// マウス操作用の変数
+let mouseYaw = 0; // 左右の回転
+let mousePitch = 0; // 上下の回転
+let isPointerLocked = false;
+
+// マウスの移動を追跡
+renderer.domElement.addEventListener('mousemove', (event) => {
+	if (isPointerLocked) {
+		const sensitivity = 0.002;
+		mouseYaw -= event.movementX * sensitivity;
+		mousePitch -= event.movementY * sensitivity;
+		
+		// 上下の回転を制限（-90度から+90度）
+		mousePitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, mousePitch));
+	}
+});
+
+// クリックでポインターロックと発車/停止
+renderer.domElement.addEventListener('click', () => {
+	if (!isPointerLocked) {
+		renderer.domElement.requestPointerLock();
+	}
 	if (!isMoving) {
 		start();
 		isMoving = true;
 		hasStarted = true;
 		velocity = 0.0008; // 初速度
 		console.log("発車！");
+	} else {
+		isMoving = false;
+		velocity = 0;
+		console.log("停止");
+	}
+});
+
+// ポインターロックの状態を追跡
+document.addEventListener('pointerlockchange', () => {
+	isPointerLocked = document.pointerLockElement === renderer.domElement;
+	if (!isPointerLocked) {
+		console.log("マウス操作終了（ESCキーで解除）");
+	} else {
+		console.log("マウスで視点を操作できます / スペースキーで停止/発車");
+	}
+});
+
+// スペースキーで発車/停止を切り替え
+document.addEventListener('keydown', (event) => {
+	if (event.code === 'Space') {
+		event.preventDefault(); // ページのスクロールを防ぐ
+		if (!isMoving) {
+			start();
+			isMoving = true;
+			hasStarted = true;
+			velocity = 0.0008; // 初速度
+			console.log("発車！");
+		} else {
+			isMoving = false;
+			velocity = 0;
+			console.log("停止");
+		}
 	}
 });
 
@@ -142,7 +198,7 @@ renderer.setAnimationLoop(() => {
 	}
 
 	position.copy(curve.getPointAt(progress));
-	position.y += 0.6; // the eyes point height from the rail
+	// trainの位置はレールの位置そのまま（カメラはtrainのローカル座標系で-0.6オフセット）
 	train.position.copy(position);
 	tangent.copy(curve.getTangentAt(progress));
 
@@ -187,12 +243,12 @@ renderer.setAnimationLoop(() => {
 			const localUpY = normRightZ * forwardX - normRightX * forwardZ;
 			const localUpZ = normRightX * forwardY - normRightY * forwardX;
 			
-			// ループの中心から外側への方向がupベクトル
+			// ループの中心から外側への方向を計算
 			const radialX = forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle);
 			const radialY = forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle);
 			const radialZ = forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle);
 			
-			// 外側から中心への方向がupベクトル（頭の方向）
+			// 内向き = upベクトル（binormalと一致）
 			upVector.set(-radialX, -radialY, -radialZ).normalize();
 		}
 		
@@ -209,8 +265,8 @@ renderer.setAnimationLoop(() => {
 		matrix.makeBasis(right, up, forward.clone().negate());
 		train.quaternion.setFromRotationMatrix(matrix);
 		
-		// カメラのローカル回転はリセット
-		camera.rotation.set(0, 0, 0);
+		// マウス操作による追加の回転をカメラに適用
+		camera.rotation.set(mousePitch, mouseYaw, 0);
 	}
 
 	// 看板の文字切り替え（スタート/ゴール）
