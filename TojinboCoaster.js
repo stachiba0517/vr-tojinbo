@@ -18,7 +18,7 @@ export class Curve extends THREE.Curve {
   // ループの開始と終了位置
   loopStart = 0.45;
   loopEnd = 0.55;
-  loopRadius = 15; // ループの半径
+  loopRadius = 30; // ループの半径（2倍に拡大）
   
   // THREE.Curveの必須メソッド
   getPoint(t, optionalTarget = new THREE.Vector3()) {
@@ -38,6 +38,24 @@ export class Curve extends THREE.Curve {
       return this.getLoopPoint(t, target);
     }
     
+    // ループ終了後の遷移区間（滝のような急落を防ぐ）
+    const transitionLength = 0.16; // 遷移区間の長さ（加速を1/2にするため2倍に延長）
+    if (t > this.loopEnd && t <= this.loopEnd + transitionLength) {
+      // ループ出口の高さを取得
+      const tScaledStart = this.loopStart * Math.PI;
+      const loopExitY = Math.sin(tScaledStart * 10) * 6 + 32; // ループ入口と同じ高さ
+      
+      // 遷移の進行度（0〜1）
+      const transitionProgress = (t - this.loopEnd) / transitionLength;
+      // smoothstepで滑らかに
+      const smoothProgress = transitionProgress * transitionProgress * (3 - 2 * transitionProgress);
+      
+      // ループ出口の高さから通常コースの高さへ徐々に遷移
+      const transitionY = loopExitY * (1 - smoothProgress) + baseY * smoothProgress;
+      
+      return target.set(baseX, transitionY, baseZ);
+    }
+    
     return target.set(baseX, baseY, baseZ);
   }
   
@@ -51,17 +69,17 @@ export class Curve extends THREE.Curve {
     // 滑らかなイージング（smoothstep関数）を適用
     const loopProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
     
-    // 通常コースの位置を取得（現在のt値から）
-    const tScaled = t * Math.PI;
-    const baseX = Math.sin(tScaled * 4) * 40;
-    const baseY = Math.sin(tScaled * 10) * 6 + 32;
-    const baseZ = Math.cos(tScaled * 2) * 40;
-    
-    // ループの開始点での通常コースの位置
+    // ループの開始点での通常コースの位置を取得
     const tScaledStart = this.loopStart * Math.PI;
     const startX = Math.sin(tScaledStart * 4) * 40;
     const startY = Math.sin(tScaledStart * 10) * 6 + 32;
     const startZ = Math.cos(tScaledStart * 2) * 40;
+    
+    // ループ区間では、通常コースの高さを入口の高さで固定（急加速を防ぐ）
+    const tScaled = t * Math.PI;
+    const baseX = Math.sin(tScaled * 4) * 40;
+    const baseY = startY; // 高さを入口で固定
+    const baseZ = Math.cos(tScaled * 2) * 40;
     
     // 進行方向ベクトルを計算（微分）
     const dx = Math.cos(tScaledStart * 4) * 4;
@@ -95,21 +113,13 @@ export class Curve extends THREE.Curve {
     const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
     
     // らせん状オフセット：進行度に応じて右から左へ移動
-    // 入口（progress=0）: 右側 (0), 出口（progress=1）: 左側 (3)
-    const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 5; // 右から左へ
-    
-    // ループの終了点での通常コースの位置を取得
-    const tScaledEnd = this.loopEnd * Math.PI;
-    const endX = Math.sin(tScaledEnd * 4) * 50;
-    const endY = Math.sin(tScaledEnd * 10) * 6 + 32;
-    const endZ = Math.cos(tScaledEnd * 2) * 40;
+    // 入口（progress=0）: 右側 (0), 出口（progress=1）: 左側へ
+    const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 10; // 右から左へ（ループサイズに合わせて調整）
     
     // ループの中心位置（らせん状オフセットを追加）
-    // 進行に応じて終了位置を通常コースに近づける補正
-    const endCorrection = loopProgress * 0.5; // 終了位置への補正量
-    const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset + (endX - startX) * endCorrection * 0.3;
-    const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset + (endY - startY) * endCorrection * 0.3;
-    const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset + (endZ - startZ) * endCorrection * 0.8;
+    const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset;
+    const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset;
+    const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset;
     
     // 円周上の位置を計算
     const loopX = centerX + forwardX * Math.cos(loopAngle) * this.loopRadius + localUpX * Math.sin(loopAngle) * this.loopRadius;
@@ -191,17 +201,11 @@ export class Curve extends THREE.Curve {
       const startY = Math.sin(tScaledStart * 10) * 6 + 32;
       const startZ = Math.cos(tScaledStart * 2) * 40;
       
-      const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 5;
+      const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 10; // ループサイズに合わせて調整
       
-      const tScaledEnd = this.loopEnd * Math.PI;
-      const endX = Math.sin(tScaledEnd * 4) * 50;
-      const endY = Math.sin(tScaledEnd * 10) * 6 + 32;
-      const endZ = Math.cos(tScaledEnd * 2) * 40;
-      
-      const endCorrection = loopProgress * 0.5;
-      const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset + (endX - startX) * endCorrection * 0.3;
-      const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset + (endY - startY) * endCorrection * 0.3;
-      const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset + (endZ - startZ) * endCorrection * 0.8;
+      const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset;
+      const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset;
+      const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset;
       
       // 現在の位置を取得
       const currentPos = this.getPointAt(t);
@@ -217,7 +221,8 @@ export class Curve extends THREE.Curve {
     }
     
     // 遷移範囲の計算（ループ外）
-    const transitionRange = 0.03;
+    const transitionRangeStart = 0.03; // ループ開始前の遷移範囲
+    const transitionRangeEnd = 0.16;   // ループ終了後の遷移範囲（加速を1/2にするため2倍に延長）
     const tScaledStart = this.loopStart * Math.PI;
     const startX = Math.sin(tScaledStart * 4) * 40;
     const startY = Math.sin(tScaledStart * 10) * 6 + 32;
@@ -248,13 +253,13 @@ export class Curve extends THREE.Curve {
     
     // 遷移範囲（ループ開始前）では、ループ開始時点のlocalUp方向を返す
     // これにより、通常コースからループ座標系への滑らかな遷移が可能になる
-    if (t >= this.loopStart - transitionRange && t < this.loopStart) {
+    if (t >= this.loopStart - transitionRangeStart && t < this.loopStart) {
       // ループ開始時点での上方向（localUp）を返す
       return this.vector3.set(localUpX, localUpY, localUpZ).normalize();
     }
     
-    // ループ終了後の遷移範囲でも同様
-    if (t > this.loopEnd && t <= this.loopEnd + transitionRange) {
+    // ループ終了後の遷移範囲：ループ座標系から世界の上方向へ徐々に遷移
+    if (t > this.loopEnd && t <= this.loopEnd + transitionRangeEnd) {
       // ループ終了時点での座標系を計算
       const tScaledEnd = this.loopEnd * Math.PI;
       const dxEnd = Math.cos(tScaledEnd * 4) * 4;
@@ -280,7 +285,16 @@ export class Curve extends THREE.Curve {
       const localUpYEnd = normRightZEnd * forwardXEnd - normRightXEnd * forwardZEnd;
       const localUpZEnd = normRightXEnd * forwardYEnd - normRightYEnd * forwardXEnd;
       
-      return this.vector3.set(localUpXEnd, localUpYEnd, localUpZEnd).normalize();
+      // 遷移の進行度（0〜1）
+      const transitionProgress = (t - this.loopEnd) / transitionRangeEnd;
+      const smoothProgress = transitionProgress * transitionProgress * (3 - 2 * transitionProgress);
+      
+      // ループ終了時点の上方向から世界の上方向へ滑らかに補間
+      const binormalX = localUpXEnd * (1 - smoothProgress) + worldUpX * smoothProgress;
+      const binormalY = localUpYEnd * (1 - smoothProgress) + worldUpY * smoothProgress;
+      const binormalZ = localUpZEnd * (1 - smoothProgress) + worldUpZ * smoothProgress;
+      
+      return this.vector3.set(binormalX, binormalY, binormalZ).normalize();
     }
     
     // 通常区間では世界の上方向を返す
@@ -473,8 +487,8 @@ export const addCoaster = async (
     
     const railMaterial = new THREE.MeshPhongMaterial({ 
       color: 0x888888,
-      metalness: 0.8,
-      roughness: 0.2
+      shininess: 80,
+      specular: 0x444444
     });
     
     const leftRailMesh = new THREE.Mesh(leftRailGeometry, railMaterial);
