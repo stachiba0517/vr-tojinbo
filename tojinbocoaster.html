@@ -330,12 +330,12 @@ renderer.setAnimationLoop(() => {
 		camera.rotation.set(mousePitch, mouseYaw, 0);
 	}
 
-	// 看板の文字切り替え（発車から2秒経過で「ゴール」）
+	// 看板の文字切り替え（発車から3秒経過で「ゴール」）
 	if (scene.userData.signControl) {
 		const signControl = scene.userData.signControl;
 		
-		// 発車から2秒経過したら「ゴール」に切り替え
-		if (coasterState === STATE.RUNNING && startTime > 0 && (time - startTime) >= 2000 && !signControl.isGoal) {
+		// 発車から3秒経過したら「ゴール」に切り替え
+		if (coasterState === STATE.RUNNING && startTime > 0 && (time - startTime) >= 3000 && !signControl.isGoal) {
 			signControl.updateTexture(signControl.texture, 'ゴール');
 			signControl.material.emissiveMap = signControl.texture;
 			signControl.isGoal = true;
