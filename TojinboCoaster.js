@@ -139,17 +139,6 @@ export class Curve extends THREE.Curve {
     const y = baseY * (1 - blendFactor) + loopY * blendFactor;
     const z = baseZ * (1 - blendFactor) + loopZ * blendFactor;
     
-    // デバッグ：レールの位置関係を出力（0.01刻み）
-    const tRounded = Math.round(t * 100) / 100;
-    if (Math.abs(t - tRounded) < 0.0001 && !this._isLogging) {
-      this._isLogging = true;
-      
-      // レールは常に上（頭上）に固定
-      console.log(`t=${t.toFixed(2)} レールは上（頭上）`);
-      
-      this._isLogging = false;
-    }
-    
     return target.set(x, y, z);
   }
   
@@ -197,15 +186,34 @@ export class Curve extends THREE.Curve {
       const localUpY = normRightZ * forwardX - normRightX * forwardZ;
       const localUpZ = normRightX * forwardY - normRightY * forwardX;
       
-      // ループのbinormal（下方向）を計算
-      // 通常区間：binormal = 下、カメラはbinormalの正の方向 = レールの下から上を見る
-      // ループ区間：binormal = 内向き、カメラはbinormalの正の方向 = 内側から外側を見る
-      // つまり、binormalは「ループの中心から外向き」の逆 = 内向き
+      // ループの中心位置を取得（getLoopPointと同じ計算）
+      const startX = Math.sin(tScaledStart * 4) * 40;
+      const startY = Math.sin(tScaledStart * 10) * 6 + 32;
+      const startZ = Math.cos(tScaledStart * 2) * 40;
       
-      const binormalX = -(forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle));
-      const binormalY = -(forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle));
-      const binormalZ = -(forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle));
+      const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 5;
       
+      const tScaledEnd = this.loopEnd * Math.PI;
+      const endX = Math.sin(tScaledEnd * 4) * 50;
+      const endY = Math.sin(tScaledEnd * 10) * 6 + 32;
+      const endZ = Math.cos(tScaledEnd * 2) * 40;
+      
+      const endCorrection = loopProgress * 0.5;
+      const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset + (endX - startX) * endCorrection * 0.3;
+      const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset + (endY - startY) * endCorrection * 0.3;
+      const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset + (endZ - startZ) * endCorrection * 0.8;
+      
+      // 現在の位置を取得
+      const currentPos = this.getPointAt(t);
+      
+      // 現在の位置から中心への方向ベクトル（内向き）= binormal
+      // 通常区間でbinormal=上向きなので、ループでは中心方向（上/内側）を指す
+      // 0度：中心は上なのでbinormal=上向き、90度：中心は下なのでbinormal=下向き
+      const binormalX = centerX - currentPos.x;
+      const binormalY = centerY - currentPos.y;
+      const binormalZ = centerZ - currentPos.z;
+      
+      return this.vector3.set(binormalX, binormalY, binormalZ).normalize();
     }
     
     // 遷移範囲の計算（ループ外）
@@ -425,13 +433,74 @@ export const addCoaster = async (
 
 
 
+  // カスタムレールジオメトリを作成
   {
-    const geometry = new RollerCoasterGeometry(curve, 1500);
-    const material = new THREE.MeshPhongMaterial({
-      vertexColors: true
+    // まず、RollerCoasterGeometryは使わず、独自のレールを作成
+    // 2本のレール（左右）を作成
+    const railRadius = 0.1;
+    const railSegments = 1500;
+    const railSeparation = 0.8; // レール間の距離
+    
+    // 左レール用のカーブ
+    class OffsetCurve extends THREE.Curve {
+      constructor(baseCurve, offset) {
+        super();
+        this.baseCurve = baseCurve;
+        this.offset = offset; // 横方向のオフセット
+      }
+      
+      getPoint(t, optionalTarget = new THREE.Vector3()) {
+        const pos = this.baseCurve.getPointAt(t);
+        const tangent = this.baseCurve.getTangentAt(t);
+        const binormal = this.baseCurve.getBinormalAt ? this.baseCurve.getBinormalAt(t) : new THREE.Vector3(0, 1, 0);
+        
+        // binormalとtangentの外積でnormal（横方向）を取得
+        const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+        
+        // 横方向にオフセット
+        pos.add(normal.multiplyScalar(this.offset));
+        
+        return optionalTarget.copy(pos);
+      }
+    }
+    
+    const leftRailCurve = new OffsetCurve(curve, -railSeparation / 2);
+    const rightRailCurve = new OffsetCurve(curve, railSeparation / 2);
+    
+    // TubeGeometryでレールを作成
+    const leftRailGeometry = new THREE.TubeGeometry(leftRailCurve, railSegments, railRadius, 8, false);
+    const rightRailGeometry = new THREE.TubeGeometry(rightRailCurve, railSegments, railRadius, 8, false);
+    
+    const railMaterial = new THREE.MeshPhongMaterial({ 
+      color: 0x888888,
+      metalness: 0.8,
+      roughness: 0.2
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
+    
+    const leftRailMesh = new THREE.Mesh(leftRailGeometry, railMaterial);
+    const rightRailMesh = new THREE.Mesh(rightRailGeometry, railMaterial);
+    
+    scene.add(leftRailMesh);
+    scene.add(rightRailMesh);
+    
+    // 横木（枕木）を追加
+    const tieGeometry = new THREE.BoxGeometry(railSeparation + 0.4, 0.1, 0.2);
+    const tieMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 });
+    
+    for (let i = 0; i < railSegments; i += 10) {
+      const t = i / railSegments;
+      const pos = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t);
+      const binormal = curve.getBinormalAt ? curve.getBinormalAt(t) : new THREE.Vector3(0, 1, 0);
+      const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+      
+      const tie = new THREE.Mesh(tieGeometry, tieMaterial);
+      tie.position.copy(pos);
+      tie.up.copy(binormal);
+      tie.lookAt(pos.clone().add(tangent));
+      
+      scene.add(tie);
+    }
   }
   { // lifter
     const geometry = new RollerCoasterLiftersGeometry(curve, 50);
