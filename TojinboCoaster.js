@@ -94,10 +94,22 @@ export class Curve extends THREE.Curve {
     // ループの角度（-π/2から開始して一周）下から入って上へ
     const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
     
-    // ループの中心位置（固定）
-    const centerX = startX + localUpX * this.loopRadius;
-    const centerY = startY + localUpY * this.loopRadius;
-    const centerZ = startZ + localUpZ * this.loopRadius;
+    // らせん状オフセット：進行度に応じて右から左へ移動
+    // 入口（progress=0）: 右側 (0), 出口（progress=1）: 左側 (3)
+    const spiralOffset = (1 - loopProgress) * 0 - loopProgress * 5; // 右から左へ
+    
+    // ループの終了点での通常コースの位置を取得
+    const tScaledEnd = this.loopEnd * Math.PI;
+    const endX = Math.sin(tScaledEnd * 4) * 50;
+    const endY = Math.sin(tScaledEnd * 10) * 6 + 32;
+    const endZ = Math.cos(tScaledEnd * 2) * 40;
+    
+    // ループの中心位置（らせん状オフセットを追加）
+    // 進行に応じて終了位置を通常コースに近づける補正
+    const endCorrection = loopProgress * 0.5; // 終了位置への補正量
+    const centerX = startX + localUpX * this.loopRadius + normRightX * spiralOffset + (endX - startX) * endCorrection * 0.3;
+    const centerY = startY + localUpY * this.loopRadius + normRightY * spiralOffset + (endY - startY) * endCorrection * 0.3;
+    const centerZ = startZ + localUpZ * this.loopRadius + normRightZ * spiralOffset + (endZ - startZ) * endCorrection * 0.8;
     
     // 円周上の位置を計算
     const loopX = centerX + forwardX * Math.cos(loopAngle) * this.loopRadius + localUpX * Math.sin(loopAngle) * this.loopRadius;
@@ -106,8 +118,8 @@ export class Curve extends THREE.Curve {
     
     // 通常コースとループの間を滑らかに補間
     // 入口と出口でsmoothstepを使用してより滑らかに
-    const blendStart = 0.15; // 入口のブレンド範囲を広げる
-    const blendEnd = 0.85;   // 出口のブレンド範囲を広げる
+    const blendStart = 0.2; // 入口のブレンド範囲を広げる
+    const blendEnd = 0.8;   // 出口のブレンド範囲を広げる（レールの伸びを防ぐ）
     
     let blendFactor;
     if (rawProgress < blendStart) {
@@ -194,13 +206,6 @@ export class Curve extends THREE.Curve {
       const binormalY = -(forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle));
       const binormalZ = -(forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle));
       
-      // デバッグ出力
-      const tRounded = Math.round(t * 100) / 100;
-      if (Math.abs(t - tRounded) < 0.0001) {
-        console.log(`t=${t.toFixed(2)} angle=${(loopAngle * 180 / Math.PI).toFixed(0)}° binormal=(${binormalX.toFixed(2)}, ${binormalY.toFixed(2)}, ${binormalZ.toFixed(2)})`);
-      }
-      
-      return this.vector3.set(binormalX, binormalY, binormalZ).normalize();
     }
     
     // 遷移範囲の計算（ループ外）
@@ -485,7 +490,7 @@ export const addCoaster = async (
     
     // 中央のスタート看板（風でひらひら動く布）
     {
-      const canvas = createSignCanvas('🦀スタート🦀');
+      const canvas = createSignCanvas('スタート');
       const texture = new THREE.CanvasTexture(canvas);
       
       // 細かく分割したジオメトリで布を表現

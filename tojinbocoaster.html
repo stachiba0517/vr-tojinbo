@@ -99,11 +99,23 @@ const position = new THREE.Vector3();
 const tangent = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 
+// 状態管理（シンプルに1つの変数で管理）
+const STATE = {
+  STOPPED: 'stopped',   // 停止中（スタート地点）
+  RUNNING: 'running',   // 走行中
+};
+let coasterState = STATE.STOPPED;
+
 let velocity = 0;
 let progress = 0;
 let prevProgress = 0;
-let isMoving = false; // 移動状態のフラグ
-let hasStarted = false; // スタート済みかどうか
+
+// 上を見つめる時間計測用
+let lookingUpTime = 0;
+const LOOK_UP_THRESHOLD = 3000; // 3秒（ミリ秒）
+
+// 発車時刻
+let startTime = 0;
 
 let prevTime = performance.now();
 
@@ -129,15 +141,16 @@ renderer.domElement.addEventListener('click', () => {
 	if (!isPointerLocked) {
 		renderer.domElement.requestPointerLock();
 	}
-	if (!isMoving) {
+	if (coasterState === STATE.STOPPED) {
 		start();
-		isMoving = true;
-		hasStarted = true;
+		coasterState = STATE.RUNNING;
 		velocity = 0.0008; // 初速度
+		startTime = performance.now(); // 発車時刻を記録
 		console.log("発車！");
-	} else {
-		isMoving = false;
+	} else if (coasterState === STATE.RUNNING) {
+		coasterState = STATE.STOPPED;
 		velocity = 0;
+		startTime = 0;
 		console.log("停止");
 	}
 });
@@ -156,15 +169,16 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('keydown', (event) => {
 	if (event.code === 'Space') {
 		event.preventDefault(); // ページのスクロールを防ぐ
-		if (!isMoving) {
+		if (coasterState === STATE.STOPPED) {
 			start();
-			isMoving = true;
-			hasStarted = true;
+			coasterState = STATE.RUNNING;
 			velocity = 0.0008; // 初速度
+			startTime = performance.now(); // 発車時刻を記録
 			console.log("発車！");
-		} else {
-			isMoving = false;
+		} else if (coasterState === STATE.RUNNING) {
+			coasterState = STATE.STOPPED;
 			velocity = 0;
+			startTime = 0;
 			console.log("停止");
 		}
 	}
@@ -181,18 +195,28 @@ renderer.setAnimationLoop(() => {
 	// 1周したことを検出
 	const hasLooped = prevProgress > 0.8 && progress < 0.2;
 	
-	// 1周したら自動停止
-	if (hasLooped && hasStarted) {
-		isMoving = false;
-		hasStarted = false;
+	// 1周したら自動停止してスタート地点に戻る
+	if (hasLooped && coasterState === STATE.RUNNING) {
+		coasterState = STATE.STOPPED;
 		velocity = 0;
-		console.log("1周完了！停止しました");
+		progress = 0; // スタート地点に戻る
+		startTime = 0; // リセット
+		
+		// 1周完了時は看板を「スタート」に戻す
+		if (scene.userData.signControl && scene.userData.signControl.isGoal) {
+			scene.userData.signControl.updateTexture(scene.userData.signControl.texture, 'スタート');
+			scene.userData.signControl.material.emissiveMap = scene.userData.signControl.texture;
+			scene.userData.signControl.isGoal = false;
+			console.log("看板を「スタート」に変更しました");
+		}
+		
+		console.log("1周完了！スタート地点に戻りました。3秒間上を見て再スタートできます");
 	}
 
 	prevProgress = progress;
 	
 	// 移動中のみprogressを更新
-	if (isMoving) {
+	if (coasterState === STATE.RUNNING) {
 		progress += velocity;
 		progress = progress % 1;
 	}
@@ -203,11 +227,48 @@ renderer.setAnimationLoop(() => {
 	tangent.copy(curve.getTangentAt(progress));
 
 	// 移動中のみ速度を計算
-	if (isMoving) {
+	if (coasterState === STATE.RUNNING) {
 		velocity -= tangent.y * 0.0000008 * delta;
 		velocity = Math.max(vmin, Math.min(vmax, velocity));
 	}
 
+	// VRモードで上を見つめる時間を計測（停止中のみ）
+	if (renderer.xr.isPresenting && coasterState === STATE.STOPPED) {
+		// VRカメラの向きを取得
+		const vrCamera = renderer.xr.getCamera(camera);
+		const cameraDirection = new THREE.Vector3(0, 0, -1);
+		cameraDirection.applyQuaternion(vrCamera.quaternion);
+		
+		// 上を見ているかチェック（Y成分が0.7以上なら上向き、約45度以上）
+		if (cameraDirection.y > 0.7) {
+			lookingUpTime += delta;
+			
+			// 3秒間上を見続けたら発車
+			if (lookingUpTime >= LOOK_UP_THRESHOLD) {
+				start();
+				coasterState = STATE.RUNNING;
+				velocity = 0.0008; // 初速度
+				startTime = time; // 発車時刻を記録
+				lookingUpTime = 0;
+				console.log("上を見つめて発車しました！");
+			} else {
+				// 進行状況を表示（0.1秒ごと）
+				if (Math.floor(lookingUpTime / 100) !== Math.floor((lookingUpTime - delta) / 100)) {
+					console.log(`上を見つめています... ${(lookingUpTime / 1000).toFixed(1)}秒 / 3秒`);
+				}
+			}
+		} else {
+			// 上を見るのをやめたらリセット
+			if (lookingUpTime > 0) {
+				console.log("上を見るのをやめました");
+			}
+			lookingUpTime = 0;
+		}
+	} else {
+		// VRモードでない、または走行中の場合は時間をリセット
+		lookingUpTime = 0;
+	}
+	
 	// カメラを進行方向に向ける（VRモードでない場合）
 	if (!renderer.xr.isPresenting) {
 		// ループ区間でのupベクトルの計算
@@ -269,25 +330,18 @@ renderer.setAnimationLoop(() => {
 		camera.rotation.set(mousePitch, mouseYaw, 0);
 	}
 
-	// 看板の文字切り替え（スタート/ゴール）
+	// 看板の文字切り替え（発車から2秒経過で「ゴール」）
 	if (scene.userData.signControl) {
 		const signControl = scene.userData.signControl;
 		
-		// 一周したことを検出（progress が 1.0 を超えて 0 に戻った）
-		const hasLooped = prevProgress > 0.8 && progress < 0.2;
-		
-		// ゴールエリアに入ったらゴールに切り替え
-		if (progress >= 0.85 && !signControl.isGoal) {
-			signControl.updateTexture(signControl.texture, '🦀ゴール🦀');
+		// 発車から2秒経過したら「ゴール」に切り替え
+		if (coasterState === STATE.RUNNING && startTime > 0 && (time - startTime) >= 2000 && !signControl.isGoal) {
+			signControl.updateTexture(signControl.texture, 'ゴール');
 			signControl.material.emissiveMap = signControl.texture;
 			signControl.isGoal = true;
-		} 
-		// 一周してスタートエリアを通過したらスタートに戻す
-		else if (hasLooped && signControl.isGoal && progress > 0.4) {
-			signControl.updateTexture(signControl.texture, '🦀スタート🦀');
-			signControl.material.emissiveMap = signControl.texture;
-			signControl.isGoal = false;
+			console.log("看板を「ゴール」に変更しました");
 		}
+		// 「スタート」への切り替えは1周完了時のみ（上記の1周検出処理で行う）
 	}
 
 	// 布のアニメーション
