@@ -234,10 +234,9 @@ renderer.setAnimationLoop(() => {
 
 	// VRモードで上を見つめる時間を計測（停止中のみ）
 	if (renderer.xr.isPresenting && coasterState === STATE.STOPPED) {
-		// VRカメラの向きを取得
-		const vrCamera = renderer.xr.getCamera(camera);
-		const cameraDirection = new THREE.Vector3(0, 0, -1);
-		cameraDirection.applyQuaternion(vrCamera.quaternion);
+		// VRカメラのワールド空間での向きを取得
+		const cameraDirection = new THREE.Vector3();
+		camera.getWorldDirection(cameraDirection);
 		
 		// 上を見ているかチェック（Y成分が0.7以上なら上向き、約45度以上）
 		if (cameraDirection.y > 0.7) {
