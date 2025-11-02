@@ -144,7 +144,7 @@ renderer.domElement.addEventListener('click', () => {
 	if (coasterState === STATE.STOPPED) {
 		start();
 		coasterState = STATE.RUNNING;
-		velocity = 0.00045; // 初速度（3/4）
+		velocity = 0.000225; // 初速度（1/2）
 		startTime = performance.now(); // 発車時刻を記録
 		console.log("発車！");
 	} else if (coasterState === STATE.RUNNING) {
@@ -172,7 +172,7 @@ document.addEventListener('keydown', (event) => {
 		if (coasterState === STATE.STOPPED) {
 			start();
 			coasterState = STATE.RUNNING;
-			velocity = 0.00045; // 初速度（3/4）
+			velocity = 0.000225; // 初速度（1/2）
 			startTime = performance.now(); // 発車時刻を記録
 			console.log("発車！");
 		} else if (coasterState === STATE.RUNNING) {
@@ -189,8 +189,8 @@ renderer.setAnimationLoop(() => {
 	const delta = time - prevTime;
 
 	// 速度の範囲
-	const vmin = 0.00018; // 最小速度（3/4）
-	const vmax = 0.0009; // 最大速度（3/4）
+	const vmin = 0.00009; // 最小速度（1/2）
+	const vmax = 0.00045; // 最大速度（1/2）
 
 	// 1周したことを検出
 	const hasLooped = prevProgress > 0.8 && progress < 0.2;
@@ -228,7 +228,7 @@ renderer.setAnimationLoop(() => {
 
 	// 移動中のみ速度を計算
 	if (coasterState === STATE.RUNNING) {
-		velocity -= tangent.y * 0.00000045 * delta; // 加速度係数（3/4）
+		velocity -= tangent.y * 0.000000225 * delta; // 加速度係数（1/2）
 		velocity = Math.max(vmin, Math.min(vmax, velocity));
 	}
 
@@ -246,7 +246,7 @@ renderer.setAnimationLoop(() => {
 			if (lookingUpTime >= LOOK_UP_THRESHOLD) {
 				start();
 				coasterState = STATE.RUNNING;
-				velocity = 0.00045; // 初速度（3/4）
+				velocity = 0.000225; // 初速度（1/2）
 				startTime = time; // 発車時刻を記録
 				lookingUpTime = 0;
 				console.log("上を見つめて発車しました！");
