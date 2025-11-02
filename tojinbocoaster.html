@@ -89,7 +89,7 @@ if (vbmode) {
 const train = new THREE.Object3D();
 scene.add(train);
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-camera.position.set(0, 1, 0);
+camera.position.set(0, 1.2, 0);
 train.add(camera);
 
 const position = new THREE.Vector3();
@@ -227,6 +227,13 @@ renderer.setAnimationLoop(() => {
 	if (coasterState === STATE.RUNNING) {
 		velocity -= tangent.y * 0.000000225 * delta; // 加速度係数（1/2）
 		velocity = Math.max(vmin, Math.min(vmax, velocity));
+		
+		// ゴール直前（progress >= 0.95）で減速
+		if (progress >= 0.95) {
+			const slowdownFactor = 1 - (progress - 0.95) / 0.05; // 0.95で1、1.0で0
+			const targetSpeed = vmin * slowdownFactor;
+			velocity = Math.max(targetSpeed, velocity * 0.98); // 徐々に減速
+		}
 	}
 
 	// VRモードで上を見つめる時間を計測（停止中のみ）
