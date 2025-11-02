@@ -89,10 +89,10 @@ if (vbmode) {
 const train = new THREE.Object3D();
 scene.add(train);
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-// カメラをbinormalの正の方向に配置
-// 通常区間：binormalは下なので、カメラは下（+0.6）= レールの下から上を見る
-// ループ区間：binormalは内向きなので、カメラは内側（+0.6）= 内側から外を見る
-camera.position.set(0, 0.6, 0);
+// カメラをbinormalの負の方向に配置
+// 通常区間：binormalは下なので、カメラは上（-0.6）= レールの上から下を見る
+// ループ区間：binormalは内向きなので、カメラは外側（-0.6）= 外側から内を見る
+camera.position.set(0, -0.6, 0);
 train.add(camera);
 
 const position = new THREE.Vector3();
