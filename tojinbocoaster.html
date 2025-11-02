@@ -88,9 +88,14 @@ if (vbmode) {
 
 const train = new THREE.Object3D();
 scene.add(train);
+
+// VRモード対応: カメラの親オブジェクト（rig）を作成してオフセット
+const cameraRig = new THREE.Object3D();
+cameraRig.position.set(0, 1.1, 0);
+train.add(cameraRig);
+
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-camera.position.set(0, 1.1, 0);
-train.add(camera);
+cameraRig.add(camera);
 
 const position = new THREE.Vector3();
 const tangent = new THREE.Vector3();
