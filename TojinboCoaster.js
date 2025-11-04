@@ -408,6 +408,8 @@ export const addCoaster = async (
   modelurl = "https://code4fukui.github.io/vr-tojinbo/tojinbo-base1.glb",
   modelpos = null,
 ) => {
+  let material = null;
+  let mesh = null;
   if (skyurl) { // sky
     //const url = "https://code4fukui.github.io/vr-fukui/img/vr-tojinbo.jpg";
     const url = skyurl;
@@ -417,8 +419,12 @@ export const addCoaster = async (
     // invert the geometry on the x-axis so that all of the faces point inward
     geometry.scale(-1, 1, 1);
     const texture = new THREE.TextureLoader().load(url);
-    const material = new THREE.MeshBasicMaterial({ map: texture });
-    const mesh = new THREE.Mesh(geometry, material);
+    texture.colorSpace = THREE.SRGBColorSpace; // three.js r150+ の推奨設定
+    material = new THREE.MeshBasicMaterial({ 
+      map: texture,
+      color: new THREE.Color(1, 1, 1) // ← 0.5で半分の明るさ（夜っぽい）
+ });
+    mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.y = Math.PI;
     
     /*
@@ -446,6 +452,79 @@ export const addCoaster = async (
   scene.add(glb.scene);
 
 
+    // ===== 夜空 =====
+  const nightSky = new THREE.Group();
+  nightSky.visible = false; // 夜だけ表示
+  scene.add(nightSky);
+
+  // 星
+  function makeStars(count, radius, size = 1.0, opacity = 0.85) {
+    const geom = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      // 球殻上にランダム散布
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const r = radius;
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.cos(phi);
+      const z = r * Math.sin(phi) * Math.sin(theta);
+      if (Math.random() > (y / radius)) continue;
+      pos[i * 3 + 0] = x;
+      pos[i * 3 + 1] = y;
+      pos[i * 3 + 2] = z;
+    }
+    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+    const mat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size,
+      sizeAttenuation: false,  // 遠景でも粒を均一に
+      transparent: true,
+      opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    return new THREE.Points(geom, mat);
+  }
+
+  const starsFar  = makeStars(1600, 295, 0.9, 0.82);
+  const starsNear = makeStars(800,  270, 1.2, 0.75);
+  nightSky.add(starsFar, starsNear);
+
+  // ===== API =====
+  function setSkyBrightness(v) {
+    if (material) {
+      material.color.setScalar(v); // 乗算で暗く
+      material.needsUpdate = true;
+    }
+  }
+
+  function setModelBrightness(v) {
+    obj.traverse((child) => {
+      if (child.isMesh && child.material && child.material.color) {
+        child.material.color.setScalar(v);
+        child.material.needsUpdate = true;
+      }
+    });
+  }
+
+  function setNight(on) {
+    // 空＆モデルの暗さ
+    setSkyBrightness(on ? 0.03 : 1.0); 
+    setModelBrightness(on ? 0.55 : 1.0);
+
+    // ライティングを夜寄りに
+    light.color.set(on ? 0x8899ff : 0xfff0f0);
+    light.groundColor.set(on ? 0x000022 : 0x606066);
+    light.intensity = on ? 0.25 : 1.0;
+
+    // 夜空の表示切替
+    nightSky.visible = on;
+  }
 
   // カスタムレールジオメトリを作成
   {
@@ -829,5 +908,17 @@ export const addCoaster = async (
       scene.add(rightLight);
     }
   }
+
+ // === Night / Day 切替関数 ===
+    return {
+    light,
+    material: material,
+    mesh: mesh,
+    model: obj,
+    nightSky,
+    setSkyBrightness,
+    setModelBrightness,
+    setNight,
+  };
 
 };
