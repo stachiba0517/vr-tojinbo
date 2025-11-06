@@ -417,7 +417,8 @@ export const addCoaster = async (
     // invert the geometry on the x-axis so that all of the faces point inward
     geometry.scale(-1, 1, 1);
     const texture = new THREE.TextureLoader().load(url);
-    const material = new THREE.MeshBasicMaterial({ map: texture });
+    texture.colorSpace = THREE.SRGBColorSpace; // three.js r150+ の推奨設定
+    const material = new THREE.MeshBasicMaterial({ map: texture});
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.y = Math.PI;
     
@@ -497,25 +498,110 @@ export const addCoaster = async (
     scene.add(leftRailMesh);
     scene.add(rightRailMesh);
     
-    // 横木（枕木）を追加
-    const tieGeometry = new THREE.BoxGeometry(railSeparation + 0.4, 0.1, 0.2);
-    const tieMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 });
+    const sleeperURL = '/models/sleeper.glb';
+
+    try {
+      const loader2 = new PromiseGLTFLoader();
+      let sleeperProto = (await loader2.promiseLoad(sleeperURL)).scene;
+
+      // 見た目調整
+      sleeperProto.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = o.receiveShadow = true;
+          if (o.material?.map) o.material.map.colorSpace = THREE.SRGBColorSpace;
+        }
+      });
+
+      // 原点を中心へ
+      {
+        const box = new THREE.Box3().setFromObject(sleeperProto);
+        const c = box.getCenter(new THREE.Vector3());
+        const g = new THREE.Group();
+        sleeperProto.position.sub(c);
+        g.add(sleeperProto);
+        g.updateMatrixWorld(true);
+        sleeperProto = g;
+      }
+
+      // スケール係数を計算（敷設時に使う）
+      const baseBox = new THREE.Box3().setFromObject(sleeperProto);
+      const baseSize = baseBox.getSize(new THREE.Vector3());
+      const baseLenX = baseSize.x;
+
+      const extra = 0.40;
+      const targetLen = railSeparation + extra;
+      const kUniform = targetLen / baseLenX;
+      const visualScale = 1.05;
     
-    for (let i = 0; i < railSegments; i += 10) {
-      const t = i / railSegments;
-      const pos = curve.getPointAt(t);
-      const tangent = curve.getTangentAt(t);
-      const binormal = curve.getBinormalAt ? curve.getBinormalAt(t) : new THREE.Vector3(0, 1, 0);
-      const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+      // 4) 敷設（回転＋位置のみ。Sなし）
+      const step = 10;
+      for (let i = 0; i < railSegments; i += step) {
+        const t = i / railSegments;
       
-      const tie = new THREE.Mesh(tieGeometry, tieMaterial);
-      tie.position.copy(pos);
-      tie.up.copy(binormal);
-      tie.lookAt(pos.clone().add(tangent));
+        // 左右レールの中点
+        const L = leftRailCurve.getPoint(t);
+        const R = rightRailCurve.getPoint(t);
+        const center = new THREE.Vector3().addVectors(L, R).multiplyScalar(0.5);
       
-      scene.add(tie);
+        // 枕木の右方向（長手）= 左右差ベクトル
+        const right = new THREE.Vector3().subVectors(R, L).normalize();
+        // 上方向 = コースの binormal（なければ世界Up）
+        const up = curve.getBinormalAt ? curve.getBinormalAt(t) : new THREE.Vector3(0, 1, 0);
+        // 前方向 = right × up（右手系）
+        const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+      
+        // 変換行列 = T * R （スケールは“最初の一回のみ”適用済み）
+        const T  = new THREE.Matrix4().makeTranslation(center.x, center.y, center.z);
+        const Rm = new THREE.Matrix4().makeBasis(right, up, forward.negate()); // -Z注視系に合わせるなら negate
+
+        const S = new THREE.Matrix4().makeScale(
+          kUniform * visualScale,
+          kUniform * visualScale,
+          kUniform * visualScale
+        );
+      
+        const tie = sleeperProto.clone(true);
+        tie.matrixAutoUpdate = false;
+        tie.matrix.multiplyMatrices(T, Rm).multiply(S);
+
+        scene.add(tie);
+      }
+    
+        } catch (e) {
+          console.error('[sleeper GLB] load failed, fallback to BoxGeometry.', e);
+        
+          const tieGeometry = new THREE.BoxGeometry(1, 1, 1);
+          const tieMaterial = new THREE.MeshStandardMaterial({ color: 0x654321, metalness: 0, roughness: 0.75 });
+        
+          const extra = 0.40, step = 10;
+        
+          for (let i = 0; i < railSegments; i += step) {
+            const t = i / railSegments;
+            const L = leftRailCurve.getPoint(t);
+            const R = rightRailCurve.getPoint(t);
+            const center = new THREE.Vector3().addVectors(L, R).multiplyScalar(0.5);
+          
+            const span   = new THREE.Vector3().subVectors(R, L);
+            const length = span.length() + extra;
+            const right  = span.clone().normalize();
+          
+            const up = curve.getBinormalAt ? curve.getBinormalAt(t) : new THREE.Vector3(0, 1, 0);
+            const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+          
+            const T  = new THREE.Matrix4().makeTranslation(center.x, center.y, center.z);
+            const Rm = new THREE.Matrix4().makeBasis(right, up, forward.negate());
+            const S  = new THREE.Matrix4().makeScale(length, 0.1, 0.2); // 高さ/奥行きは固定
+          
+            const M = new THREE.Matrix4().multiplyMatrices(T, Rm).multiply(S);
+          
+            const tie = new THREE.Mesh(tieGeometry, tieMaterial);
+            tie.matrixAutoUpdate = false;
+            tie.matrix.copy(M);
+            scene.add(tie);
+          }
     }
   }
+
   { // lifter
     const geometry = new RollerCoasterLiftersGeometry(curve, 50);
     const material = new THREE.MeshPhongMaterial();
