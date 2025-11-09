@@ -501,8 +501,8 @@ export const addCoaster = async (
     const sleeperURL = '/models/sleeper.glb';
 
     try {
-      const loader2 = new PromiseGLTFLoader();
-      let sleeperProto = (await loader2.promiseLoad(sleeperURL)).scene;
+      const sleepLoader = new PromiseGLTFLoader();
+      let sleeperProto = (await sleepLoader.promiseLoad(sleeperURL)).scene;
 
       // 見た目調整
       sleeperProto.traverse(o => {
@@ -523,7 +523,7 @@ export const addCoaster = async (
         sleeperProto = g;
       }
 
-      // スケール係数を計算（敷設時に使う）
+      // スケール係数を計算
       const baseBox = new THREE.Box3().setFromObject(sleeperProto);
       const baseSize = baseBox.getSize(new THREE.Vector3());
       const baseLenX = baseSize.x;
@@ -533,7 +533,7 @@ export const addCoaster = async (
       const kUniform = targetLen / baseLenX;
       const visualScale = 1.05;
     
-      // 4) 敷設（回転＋位置のみ。Sなし）
+      // 4) 敷設
       const step = 10;
       for (let i = 0; i < railSegments; i += step) {
         const t = i / railSegments;
