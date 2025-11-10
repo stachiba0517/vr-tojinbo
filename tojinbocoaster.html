@@ -88,12 +88,13 @@ if (vbmode) {
 
 const train = new THREE.Object3D();
 scene.add(train);
+// VRモード対応: カメラの親オブジェクト（rig）を作成してオフセット
+const cameraRig = new THREE.Object3D();
+cameraRig.position.set(0, 1.1, 0);
+train.add(cameraRig);
+
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
-// カメラをbinormalの正の方向に配置
-// 通常区間：binormalは下なので、カメラは下（+0.6）= レールの下から上を見る
-// ループ区間：binormalは内向きなので、カメラは内側（+0.6）= 内側から外を見る
-camera.position.set(0, 0.6, 0);
-train.add(camera);
+cameraRig.add(camera);
 
 const position = new THREE.Vector3();
 const tangent = new THREE.Vector3();
@@ -278,8 +279,14 @@ renderer.setAnimationLoop(() => {
 
 	// 移動中のみ速度を計算
 	if (coasterState === STATE.RUNNING) {
-		velocity -= tangent.y * 0.00000045 * delta; // 加速度係数（3/4）
+		velocity -= tangent.y * 0.000000225 * delta; // 加速度係数（3/4）
 		velocity = Math.max(vmin, Math.min(vmax, velocity));
+		// ゴール直前（progress >= 0.95） で減速
+			if (progress >= 0.95) {
+			const slowdownFactor = 1 - (progress - 0.95) / 0.05; //0.95で1、1.0で0
+			const targetSpeed = vmin * slowdownFactor;
+			velocity = Math.max(targetSpeed, velocity * 0.98); //1徐々に減速
+		}
 	}
 
 	// VRモードで上を見つめる時間を計測（停止中のみ）
@@ -322,63 +329,62 @@ renderer.setAnimationLoop(() => {
 	updateNightModeVR(delta, time);
 
 
-	// カメラを進行方向に向ける（VRモードでない場合）
-	if (!renderer.xr.isPresenting) {
-		// ループ区間でのupベクトルの計算
-		let upVector = new THREE.Vector3(0, 1, 0);
+	// ループ区間でのupベクトルの計算
+	let upVector = new THREE.Vector3(0, 1, 0);
+	
+	if (progress >= curve.loopStart && progress <= curve.loopEnd) {
+		// ループ内での進行度
+		const loopProgress = (progress - curve.loopStart) / (curve.loopEnd - curve.loopStart);
+		const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
 		
-		if (progress >= curve.loopStart && progress <= curve.loopEnd) {
-			// ループ内での進行度
-			const loopProgress = (progress - curve.loopStart) / (curve.loopEnd - curve.loopStart);
-			const loopAngle = -Math.PI / 2 + loopProgress * Math.PI * 2;
-			
-			// ループの開始点での通常コースの位置
-			const tScaledStart = curve.loopStart * Math.PI;
-			const dx = Math.cos(tScaledStart * 4) * 4;
-			const dy = Math.cos(tScaledStart * 10) * 10;
-			const dz = -Math.sin(tScaledStart * 2) * 2;
-			
-			const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
-			const forwardX = dx / dirLength;
-			const forwardY = dy / dirLength;
-			const forwardZ = dz / dirLength;
-			
-			const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
-			const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
-			const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
-			const rightZ = forwardX * worldUpY - forwardY * worldUpX;
-			
-			const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
-			const normRightX = rightX / rightLength;
-			const normRightY = rightY / rightLength;
-			const normRightZ = rightZ / rightLength;
-			
-			const localUpX = normRightY * forwardZ - normRightZ * forwardY;
-			const localUpY = normRightZ * forwardX - normRightX * forwardZ;
-			const localUpZ = normRightX * forwardY - normRightY * forwardX;
-			
-			// ループの中心から外側への方向を計算
-			const radialX = forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle);
-			const radialY = forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle);
-			const radialZ = forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle);
-			
-			// 内向き = upベクトル（binormalと一致）
-			upVector.set(-radialX, -radialY, -radialZ).normalize();
-		}
+		// ループの開始点での通常コースの位置
+		const tScaledStart = curve.loopStart * Math.PI;
+		const dx = Math.cos(tScaledStart * 4) * 4;
+		const dy = Math.cos(tScaledStart * 10) * 10;
+		const dz = -Math.sin(tScaledStart * 2) * 2;
 		
-		// 正しい座標系を構築
-		// forward = tangent (進行方向 = Z軸の逆)
-		// up = upVector (頭の方向 = Y軸)
-		// right = tangent × upVector (右方向 = X軸)
-		const forward = tangent.clone().normalize();
-		const right = new THREE.Vector3().crossVectors(forward, upVector).normalize();
-		const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+		const dirLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		const forwardX = dx / dirLength;
+		const forwardY = dy / dirLength;
+		const forwardZ = dz / dirLength;
 		
-		// 回転行列を作成（Three.jsのカメラは-Z方向を見る）
-		const matrix = new THREE.Matrix4();
-		matrix.makeBasis(right, up, forward.clone().negate());
-		train.quaternion.setFromRotationMatrix(matrix);
+		const worldUpX = 0, worldUpY = 1, worldUpZ = 0;
+		const rightX = forwardY * worldUpZ - forwardZ * worldUpY;
+		const rightY = forwardZ * worldUpX - forwardX * worldUpZ;
+		const rightZ = forwardX * worldUpY - forwardY * worldUpX;
 		
+		const rightLength = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+		const normRightX = rightX / rightLength;
+		const normRightY = rightY / rightLength;
+		const normRightZ = rightZ / rightLength;
+		
+		const localUpX = normRightY * forwardZ - normRightZ * forwardY;
+		const localUpY = normRightZ * forwardX - normRightX * forwardZ;
+		const localUpZ = normRightX * forwardY - normRightY * forwardX;
+		
+		// ループの中心から外側への方向を計算
+		const radialX = forwardX * Math.cos(loopAngle) + localUpX * Math.sin(loopAngle);
+		const radialY = forwardY * Math.cos(loopAngle) + localUpY * Math.sin(loopAngle);
+		const radialZ = forwardZ * Math.cos(loopAngle) + localUpZ * Math.sin(loopAngle);
+		
+		// 内向き = upベクトル（binormalと一致）
+		upVector.set(-radialX, -radialY, -radialZ).normalize();
+	}
+	
+	// 正しい座標系を構築
+	// forward = tangent (進行方向 = Z軸の逆)
+	// up = upVector (頭の方向 = Y軸)
+	// right = tangent × upVector (右方向 = X軸)
+	const forward = tangent.clone().normalize();
+	const right = new THREE.Vector3().crossVectors(forward, upVector).normalize();
+	const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+	
+	// 回転行列を作成（Three.jsのカメラは-Z方向を見る）
+	const matrix = new THREE.Matrix4();
+	matrix.makeBasis(right, up, forward.clone().negate());
+	train.quaternion.setFromRotationMatrix(matrix);
+
+	if (!renderer.xr.isPresenting) {	
 		// マウス操作による追加の回転をカメラに適用
 		camera.rotation.set(mousePitch, mouseYaw, 0);
 	}
